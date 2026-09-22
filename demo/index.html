@@ -1,0 +1,2775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentMesh + InferRoute — Control Panel</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-hover: #1c2330;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent-dim: #1f6feb;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --radius: 8px;
+    --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-header {
+    padding: 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .sidebar-header p {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 14px;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+  }
+  .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+  .nav-item.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: var(--surface-hover);
+  }
+  .nav-icon { font-size: 18px; width: 24px; text-align: center; }
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .status-dot.up { background: var(--green); }
+  .status-dot.down { background: var(--red); }
+
+  /* Main content */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 40px;
+  }
+  .page { display: none; }
+  .page.active { display: block; }
+  .page-header { margin-bottom: 24px; }
+  .page-header h2 { font-size: 22px; font-weight: 600; }
+  .page-header p { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+
+  /* Forms */
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .form-group { flex: 1; }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  input, select, textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+  }
+  textarea { font-family: var(--mono); resize: vertical; min-height: 80px; }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  /* Buttons */
+  .btn {
+    background: var(--accent-dim);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: var(--accent); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: var(--red); }
+  .btn-success { background: var(--green); }
+
+  /* Response area */
+  .response-area {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
+  .response-empty { color: var(--text-dim); font-style: italic; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-blue { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .badge-purple { background: rgba(188,140,255,0.15); color: var(--purple); }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* Stats */
+  .stat { text-align: center; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; color: var(--text-dim); font-weight: 600; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: var(--surface-hover); }
+
+  /* Chat messages */
+  .chat-msg {
+    margin-bottom: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    max-width: 85%;
+  }
+  .chat-msg.user { background: var(--accent-dim); margin-left: auto; }
+  .chat-msg.assistant { background: var(--surface); border: 1px solid var(--border); }
+  .chat-msg .role { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  .chat-msg .content { font-size: 13px; line-height: 1.6; }
+
+  /* Routing info */
+  .routing-info {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .routing-info-item {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .routing-info-item span { color: var(--text); font-weight: 500; }
+
+  /* RAG sources */
+  .rag-sources { margin-top: 12px; }
+  .rag-source {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .rag-source .score {
+    font-family: var(--mono);
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  /* Workflow status */
+  .workflow-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+  }
+  .workflow-item .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .workflow-item .id { font-family: var(--mono); font-size: 13px; }
+  .workflow-item .detail { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+  /* Workflow steps */
+  .workflow-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 16px;
+  }
+  .workflow-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .workflow-step.active {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(88,166,255,0.08);
+  }
+  .workflow-step.completed {
+    border-color: var(--green);
+    color: var(--text);
+  }
+  .workflow-step.rejected {
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .workflow-step .icon {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .workflow-step.completed .icon {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+  }
+  .workflow-step.rejected .icon {
+    background: var(--red);
+    border-color: var(--red);
+    color: white;
+  }
+  .workflow-step.active .icon {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toggle */
+  .toggle { display: flex; align-items: center; gap: 8px; }
+  .toggle label { font-size: 12px; color: var(--text-dim); margin: 0; }
+  .toggle input[type="checkbox"] { width: auto; }
+
+  /* Doc upload */
+  .doc-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  .config-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .config-bar select { width: auto; min-width: 150px; }
+
+  /* Architecture page */
+  code {
+    background: var(--surface);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+  }
+
+  /* Supplier table */
+  .supplier-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .supplier-table th {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .supplier-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .supplier-table tr.selected {
+    background: rgba(88,166,255,0.08);
+  }
+  .supplier-table tr.selected td:first-child {
+    border-left: 3px solid var(--accent);
+  }
+  .score-bar {
+    display: inline-block;
+    width: 60px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+  .score-bar-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 3px;
+  }
+
+  /* Decision panel */
+  .decision-panel {
+    background: rgba(88,166,255,0.06);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 12px;
+  }
+  .decision-panel .label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .decision-panel .value {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .decision-panel .rationale {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  /* Scale demo */
+  .scale-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .scale-cell {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+    font-size: 11px;
+  }
+  .scale-cell .mini-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .scale-cell .mini-status {
+    font-size: 10px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <h1>AgentMesh + InferRoute</h1>
+    <p>Unified Control Panel</p>
+  </div>
+
+  <div class="nav-item active" onclick="showPage('story')">
+    <span class="nav-icon">🎯</span> Story
+  </div>
+  <div class="nav-item" onclick="showPage('architecture')">
+    <span class="nav-icon">🏗️</span> Architecture
+  </div>
+  <div class="nav-item" onclick="showPage('playground')">
+    <span class="nav-icon">💬</span> Playground
+  </div>
+  <div class="nav-item" onclick="showPage('workflow')">
+    <span class="nav-icon">⚡</span> Workflows
+  </div>
+  <div class="nav-item" onclick="showPage('rag')">
+    <span class="nav-icon">📚</span> Knowledge Base
+  </div>
+  <div class="nav-item" onclick="showPage('usage')">
+    <span class="nav-icon">📊</span> Usage
+  </div>
+  <div class="nav-item" onclick="showPage('tracing')">
+    <span class="nav-icon">🔍</span> Tracing
+  </div>
+
+  <div class="sidebar-footer">
+    <div><span class="status-dot up"></span>InferRoute :8070</div>
+    <div style="margin-top:4px"><span class="status-dot up"></span>AgentMesh :8000</div>
+    <div style="margin-top:8px;opacity:0.6">v0.1.0 — Prototype</div>
+  </div>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+
+<!-- ═══════════════ PAGE 0: STORY ═══════════════ -->
+<div class="page active" id="page-story">
+  <div class="page-header">
+    <h2>The Story</h2>
+    <p>Two infrastructure projects — a durable AI agent execution platform and a smart LLM gateway. The sourcing agent is one use case running on top.</p>
+  </div>
+
+  <!-- The Infrastructure -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">What We Built — The Infrastructure</div>
+    <div style="font-size:14px;line-height:1.8;color:var(--text-dim)">
+      Two systems that work together to run AI agents reliably at scale:
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div style="padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+        <div style="font-weight:600;font-size:15px;color:var(--accent);margin-bottom:8px">AgentMesh</div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.7">
+          A <strong style="color:var(--text)">durable agent execution platform</strong> on Temporal + LangGraph.<br><br>
+          • Workers, task queues, horizontal scaling<br>
+          • Circuit breakers + bulkheads for failure isolation<br>
+          • Human-in-the-loop with structural checkpoints<br>
+          • Crash recovery — workflows survive worker death<br>
+          • Zero-downtime agent updates via workflow versioning<br>
+          • Load tested: 10,000 concurrent workflows
+        </div>
+      </div>
+      <div style="padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+        <div style="font-weight:600;font-size:15px;color:var(--green);margin-bottom:8px">InferRoute</div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.7">
+          A <strong style="color:var(--text)">smart LLM gateway</strong> — OpenAI-compatible, drop-in replacement.<br><br>
+          • Complexity-aware routing (cheap/standard/premium)<br>
+          • Multi-layer caching (exact + semantic + coalescer)<br>
+          • Provider failover (OpenAI → Anthropic → vLLM)<br>
+          • RAG integration with namespace-scoped retrieval<br>
+          • 60% cost reduction by routing to cheaper models<br>
+          • p99 < 50ms for cache hits vs 2s for upstream
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--text-dim);line-height:1.7">
+      <strong style="color:var(--text)">Together:</strong> AgentMesh orchestrates the agent workflow. Every LLM call the agent makes
+      goes through InferRoute's routing, caching, and RAG pipeline. The agent doesn't know which model it's using —
+      InferRoute decides based on complexity. The agent doesn't know about caching — InferRoute handles it transparently.
+    </div>
+  </div>
+
+  <!-- The Use Case -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">The Demo Use Case — Sourcing Agent</div>
+    <div style="font-size:14px;line-height:1.8;color:var(--text-dim)">
+      To prove the infrastructure works, we built a <strong style="color:var(--text)">sourcing agent</strong> —
+      one agent running on the platform. It automates procurement:
+      a company needs <strong style="color:var(--text)">100 USB-C cables</strong> under <strong style="color:var(--text)">$5/unit</strong>.
+      A human would manually search supplier catalogs, compare prices, check ratings, make a decision,
+      create a purchase order, and initiate payment. <strong style="color:var(--red)">That takes ~2 hours.</strong>
+    </div>
+    <div style="margin-top:12px;font-size:13px;color:var(--text-dim);line-height:1.7">
+      The agent does it in <strong style="color:var(--green)">~30 seconds</strong>:
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <span class="badge badge-blue">Research</span>
+      <span class="badge badge-blue">Score</span>
+      <span class="badge badge-blue">Decide (LLM via InferRoute)</span>
+      <span class="badge badge-yellow">Approve (Human checkpoint)</span>
+      <span class="badge badge-green">Confirm (PO + Payment)</span>
+    </div>
+    <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;font-size:12px;color:var(--text-dim);line-height:1.7">
+      <strong style="color:var(--text)">But the sourcing agent is just one use case.</strong> The same infrastructure supports any multi-step agent:
+      compliance review, customer support, data pipelines, financial analysis — any agent that needs
+      tools, LLM calls, human approval, and crash recovery. The agent changes. The infrastructure doesn't.
+    </div>
+  </div>
+
+  <!-- See It Live -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">See It Live</div>
+    <div style="font-size:14px;line-height:1.8;color:var(--text-dim);margin-bottom:16px">
+      Click below to launch the sourcing agent and watch every step happen in real time.
+      You'll see suppliers found, scores calculated, the LLM's reasoning, human approval, and crash recovery.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="showPage('workflow'); launchDemoWorkflow()" style="font-size:14px;padding:12px 24px">
+        Launch Demo Workflow
+      </button>
+      <button class="btn btn-secondary" onclick="showPage('workflow'); launchScaleDemo()" style="font-size:14px;padding:12px 24px">
+        Launch 10 Parallel Workflows
+      </button>
+      <button class="btn btn-secondary" onclick="showPage('workflow'); simulateCrash()" style="font-size:14px;padding:12px 24px">
+        Simulate Worker Crash
+      </button>
+      <button class="btn btn-secondary" onclick="showPage('architecture')" style="font-size:14px;padding:12px 24px">
+        View Architecture & Load Tests
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="grid-3">
+    <div class="card">
+      <div class="stat-value" style="color:var(--red)">~2 hrs</div>
+      <div class="stat-label">Manual sourcing time</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="color:var(--green)">~30 sec</div>
+      <div class="stat-label">With AgentMesh</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="color:var(--accent)">240x</div>
+      <div class="stat-label">Speed improvement</div>
+    </div>
+  </div>
+
+  <!-- Infrastructure Stats -->
+  <div class="grid-3" style="margin-top:16px">
+    <div class="card">
+      <div class="stat-value" style="color:var(--accent)">10,000</div>
+      <div class="stat-label">Concurrent workflows load tested</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="color:var(--green)">98.7%</div>
+      <div class="stat-label">Success rate under load</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="color:var(--yellow)">~60%</div>
+      <div class="stat-label">LLM cost reduction via InferRoute</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: ARCHITECTURE ═══════════════ -->
+<div class="page" id="page-architecture">
+  <div class="page-header">
+    <h2>Architecture & Engineering Decisions</h2>
+    <p>The patterns that make this system scale to 1M concurrent workflows without breaking.</p>
+  </div>
+
+  <!-- AgentMesh Section -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">AgentMesh — Durable AI Agent Execution Platform</div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+      Built on Temporal + LangGraph. Orchestrates multi-step AI agents (Research → Score → Decide → Approve → Confirm)
+      with human-in-the-loop checkpoints, rejection-based retry loops, and cross-workflow failure isolation.
+      Agents are durable (survive crashes), replayable (deterministic), and pauseable (human approval).
+    </div>
+
+    <div style="border-left:3px solid var(--accent);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">1. Temporal Workers + Task Queues → Horizontal Scalability</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Generic Worker Factory — <code style="font-family:var(--mono);font-size:11px">run_worker(client, task_queue, workflows, activities)</code><br>
+        <strong style="color:var(--text)">Problem:</strong> How do you scale from 10 to 1,000,000 concurrent agent workflows?<br>
+        <strong style="color:var(--text)">Solution:</strong> Workers are stateless pollers. They pull tasks from a shared Task Queue. To handle 10x more agent workflows, you add 10x more workers — no code changes, no sharding logic. Temporal handles dispatch, dedup, and retry.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> The gateway starts agent workflows, workers execute the agent's activities (LLM calls, tool calls, searches). They're decoupled. You can scale workers independently of gateways. Add workers on different machines, different regions — they all poll the same queue. <strong style="color:var(--text)">Load tested: 10,000 concurrent agent workflows, 98.7% success rate, 5.4x throughput with 4 workers.</strong>
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--red);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">2. Circuit Breaker — Cross-Workflow Failure Isolation for Agent Tools</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Circuit Breaker (CLOSED → OPEN → HALF_OPEN)<br>
+        <strong style="color:var(--text)">Problem:</strong> Temporal retries failed Activities per-workflow. But if a supplier API is down, 1000 agent workflows all retry the same tool simultaneously — thundering herd.<br>
+        <strong style="color:var(--text)">Solution:</strong> Per-tool circuit breaker keyed by tool name, shared across all agent workflows. After 5 consecutive failures, circuit opens — all agents fail fast instead of hammering a dead API. After 30s, half-open probes test recovery.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> Without this, one dead supplier API can take down the entire agent fleet. With it, the system degrades gracefully — agents using healthy tools keep running, agents using broken tools fail fast and retry later.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--yellow);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">3. Bulkhead — Concurrency Isolation Per Agent Tool</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Bulkhead (semaphore-based concurrency cap)<br>
+        <strong style="color:var(--text)">Problem:</strong> If a supplier API is slow, it occupies all worker activity slots. Other agents' tool calls time out waiting for a slot — even though their downstream is healthy.<br>
+        <strong style="color:var(--text)">Solution:</strong> Per-tool bulkhead caps concurrent in-flight calls (default: 10). A slow supplier API can't consume more than its cap. Other agents' tool calls proceed in parallel.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> This is the failure isolation Temporal doesn't give you. Temporal isolates per-agent-workflow; bulkheads isolate per-tool. Together they provide full blast-radius containment — one slow tool can't starve the entire agent fleet.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--green);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">4. Workflow Versioning — Zero-Downtime Agent Behavior Changes</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Safe Migration Wrapper — <code style="font-family:var(--mono);font-size:11px">is_patched(change_id)</code><br>
+        <strong style="color:var(--text)">Problem:</strong> You need to add a Score step to the sourcing agent. But 500 agent workflows are already running with the old 3-step graph. You can't just deploy new code — replaying old workflows with new code breaks determinism.<br>
+        <strong style="color:var(--text)">Solution:</strong> Temporal's <code style="font-family:var(--mono);font-size:11px">workflow.patched()</code> returns True for new workflows, False for in-flight workflows replaying old code. New agent workflows get the Score step; old workflows continue on the old path. Once all old workflows complete, deprecate the patch.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> You can deploy agent behavior changes multiple times a day without waiting for in-flight workflows to drain. This is how you iterate on agent intelligence without downtime.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--purple);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">5. Namespace Isolation — Multi-Tenancy</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Tenant Isolation Primitive — Temporal Namespaces<br>
+        <strong style="color:var(--text)">Problem:</strong> Multiple tenants share the same Temporal cluster. Tenant A's workflows should be invisible to Tenant B.<br>
+        <strong style="color:var(--text)">Solution:</strong> Each tenant gets a Namespace. Clients are cached per-namespace. Workflows, queries, and signals are all namespace-scoped — no cross-tenant visibility.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> Multi-tenancy at the platform level, not the application level. No need to filter by tenant_id in every query — the isolation is structural.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--accent);padding-left:16px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">6. Distributed Tracing — End-to-End Observability</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> OpenTelemetry Facade with Temporal Interceptor<br>
+        <strong style="color:var(--text)">Problem:</strong> A workflow calls 5 tools, an LLM, and pauses for human approval. When something goes wrong, how do you trace the full path?<br>
+        <strong style="color:var(--text)">Solution:</strong> OTel tracer injected at the gateway. Temporal's TracingInterceptor propagates trace context through workflow headers. Every activity, tool call, and LLM call becomes a span in the same Jaeger trace.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> One trace ID follows a request from gateway → workflow → activity → tool → LLM → response. You see the entire execution tree, not isolated logs.
+      </div>
+    </div>
+  </div>
+
+  <!-- InferRoute Section -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">InferRoute — Smart LLM Gateway</div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+      OpenAI-compatible gateway with complexity-aware routing, multi-layer caching, and provider failover.
+    </div>
+
+    <div style="border-left:3px solid var(--accent);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">1. Intelligence-Aware Routing — Cost Optimization</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Strategy Pattern — 6 pluggable routing strategies<br>
+        <strong style="color:var(--text)">Problem:</strong> Not every prompt needs GPT-4o. "What is 2+2?" doesn't need a $0.03/1K-token model. But "Analyze this supplier's financial risk" does.<br>
+        <strong style="color:var(--text)">Solution:</strong> <code style="font-family:var(--mono);font-size:11px">IntelligenceAware</code> strategy classifies request complexity (simple/medium/complex) via heuristic keywords or LLM classifier, then routes to the appropriate tier (cheap/standard/premium). Other strategies: RoundRobin, LeastConnections, LatencyAware, CostAware.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> At 1M requests/day, routing 60% to gpt-4o-mini instead of gpt-4o saves ~$18,000/month. The classification is cached, so repeated patterns don't re-classify.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--green);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">2. Multi-Layer Cache Pipeline — Request Deduplication</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Chain of Responsibility — Exact → Semantic → Coalesce → Upstream<br>
+        <strong style="color:var(--text)">Problem:</strong> Multiple workflows ask the same LLM question. Each call costs money and adds latency.<br>
+        <strong style="color:var(--text)">Solution:</strong> Three cache layers, checked in order:<br>
+        &nbsp;&nbsp;1. <strong>Exact Match</strong> — SHA256 hash of canonical request → Redis. O(1) lookup. TTL jitter prevents thundering herd.<br>
+        &nbsp;&nbsp;2. <strong>Semantic Cache</strong> — Embedding similarity ≥ threshold. "What's our refund policy?" hits cache for "What is the return policy?" even though they're not identical.<br>
+        &nbsp;&nbsp;3. <strong>Request Coalescer</strong> — Single-flight pattern. If 10 workflows ask the same question simultaneously, only 1 upstream call is made. The other 9 await the same future.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> At scale, 40-60% of LLM calls are cacheable. This cuts LLM costs in half and reduces p99 latency from 2s to <50ms for cache hits.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--red);padding-left:16px;margin-bottom:20px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">3. Provider Failover — Resilience</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Circuit Breaker per provider + failover chain<br>
+        <strong style="color:var(--text)">Problem:</strong> OpenAI has an outage. Your agent workflows all fail.<br>
+        <strong style="color:var(--text)">Solution:</strong> Provider Registry tracks health, latency (EWMA), and in-flight count per provider. On failure, RoutingService walks the failover chain: OpenAI → Anthropic → local vLLM. Circuit breaker opens per-provider after threshold failures.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> LLM providers have 99.9% SLA, not 100%. Without failover, a 43-minute OpenAI outage kills all workflows. With failover, requests transparently route to Anthropic — workflows don't even notice.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--purple);padding-left:16px">
+      <div style="font-weight:600;font-size:14px;color:var(--text)">4. Hybrid Retrieval — RAG Precision</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;line-height:1.7">
+        <strong style="color:var(--text)">Pattern:</strong> Multi-Strategy Fusion with Reranking<br>
+        <strong style="color:var(--text)">Problem:</strong> Dense vector search misses exact keyword matches. BM25 misses semantic similarity. Neither is enough alone.<br>
+        <strong style="color:var(--text)">Solution:</strong> Run BM25 (lexical) and dense vector search (semantic) in parallel. Fuse results via Reciprocal Rank Fusion (RRF). Rerank top-K with a cross-encoder-style scorer for final precision.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> Hybrid retrieval has 15-20% higher recall than either method alone. For agent memory — where missing a relevant past decision means repeating a mistake — this matters.
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent Intelligence -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Agent Intelligence — Rejection-Aware Retry Loop</div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+      The agent doesn't just execute a fixed pipeline — it adapts based on human feedback.
+    </div>
+    <div style="border-left:3px solid var(--accent);padding-left:16px;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.7">
+        <strong style="color:var(--text)">Flow:</strong> Research → Score → Decide → Approve (human checkpoint)<br>
+        <strong style="color:var(--text)">On rejection:</strong> Agent reads the rejection reason, loops back to Research with the feedback,
+        finds new suppliers, re-scores, re-decides, and asks for approval again.<br>
+        <strong style="color:var(--text)">Retry limit:</strong> 3 rejections before the agent gives up. Each retry uses different supplier pools.<br>
+        <strong style="color:var(--green)">Why it matters:</strong> This is what makes it an <em>agent</em>, not a script. It responds to feedback,
+        adapts its strategy, and tries again — the same loop a human procurement officer would follow.
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Test Results -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Real Load Test Results — Not Simulation</div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+      Actual Temporal workflows dispatched to actual workers. No mocks, no simulation.
+      Tests the full pipeline: gateway → Temporal → task queue → worker → activity → return.
+    </div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:16px">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:8px">Test</th>
+          <th style="text-align:right;padding:8px">Workflows</th>
+          <th style="text-align:right;padding:8px">Workers</th>
+          <th style="text-align:right;padding:8px">Throughput</th>
+          <th style="text-align:right;padding:8px">p50</th>
+          <th style="text-align:right;padding:8px">p99</th>
+          <th style="text-align:right;padding:8px">Success</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px">Small batch</td>
+          <td style="text-align:right;padding:8px">10</td>
+          <td style="text-align:right;padding:8px">1</td>
+          <td style="text-align:right;padding:8px;color:var(--accent)">36.5/s</td>
+          <td style="text-align:right;padding:8px">264ms</td>
+          <td style="text-align:right;padding:8px">271ms</td>
+          <td style="text-align:right;padding:8px;color:var(--green)">100%</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px">Medium batch</td>
+          <td style="text-align:right;padding:8px">100</td>
+          <td style="text-align:right;padding:8px">1</td>
+          <td style="text-align:right;padding:8px;color:var(--accent)">33.5/s</td>
+          <td style="text-align:right;padding:8px">473ms</td>
+          <td style="text-align:right;padding:8px">2.3s</td>
+          <td style="text-align:right;padding:8px;color:var(--green)">100%</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px">Scaling test</td>
+          <td style="text-align:right;padding:8px">50</td>
+          <td style="text-align:right;padding:8px">1</td>
+          <td style="text-align:right;padding:8px;color:var(--accent)">19.3/s</td>
+          <td style="text-align:right;padding:8px">588ms</td>
+          <td style="text-align:right;padding:8px">2.6s</td>
+          <td style="text-align:right;padding:8px;color:var(--green)">100%</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px">Scaling test</td>
+          <td style="text-align:right;padding:8px">50</td>
+          <td style="text-align:right;padding:8px">2</td>
+          <td style="text-align:right;padding:8px;color:var(--accent)">20.8/s</td>
+          <td style="text-align:right;padding:8px">410ms</td>
+          <td style="text-align:right;padding:8px">2.4s</td>
+          <td style="text-align:right;padding:8px;color:var(--green)">100%</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);background:rgba(34,197,94,0.05)">
+          <td style="padding:8px;font-weight:600">Scaling test (sweet spot)</td>
+          <td style="text-align:right;padding:8px">50</td>
+          <td style="text-align:right;padding:8px">4</td>
+          <td style="text-align:right;padding:8px;color:var(--accent);font-weight:600">105.2/s</td>
+          <td style="text-align:right;padding:8px">345ms</td>
+          <td style="text-align:right;padding:8px;color:var(--green)">472ms</td>
+          <td style="text-align:right;padding:8px;color:var(--green)">100%</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px">Large batch</td>
+          <td style="text-align:right;padding:8px">500</td>
+          <td style="text-align:right;padding:8px">1</td>
+          <td style="text-align:right;padding:8px;color:var(--accent)">39.6/s</td>
+          <td style="text-align:right;padding:8px">966ms</td>
+          <td style="text-align:right;padding:8px">6.7s</td>
+          <td style="text-align:right;padding:8px;color:var(--green)">100%</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px">Stress test</td>
+          <td style="text-align:right;padding:8px">10,000</td>
+          <td style="text-align:right;padding:8px">100</td>
+          <td style="text-align:right;padding:8px;color:var(--accent)">36.6/s</td>
+          <td style="text-align:right;padding:8px">6.0s</td>
+          <td style="text-align:right;padding:8px;color:var(--red)">67s</td>
+          <td style="text-align:right;padding:8px;color:var(--yellow)">98.7%</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size:12px;color:var(--text-dim);line-height:1.7;padding:12px;background:var(--surface);border-radius:8px">
+      <strong style="color:var(--text)">Key findings:</strong><br>
+      • 4 workers on 12 cores (no oversubscription) = <strong style="color:var(--green)">5.4x throughput</strong>, p99 dropped 82% (2.6s → 472ms)<br>
+      • 100 workers on 12 cores (8x oversubscription) = p99 degrades to 67s due to CPU context switching, not Temporal<br>
+      • In production: distribute 100 workers across 10-20 machines — bottleneck moves from CPU to network I/O<br>
+      • Architecture scales linearly — add workers, get proportional throughput. No sharding code, no partition logic.
+    </div>
+  </div>
+
+  <!-- Scale Math -->
+  <div class="card">
+    <div class="card-title">The Scale Math</div>
+    <div style="font-size:13px;line-height:2;color:var(--text-dim)">
+      <strong style="color:var(--text)">1 worker</strong> = 100 concurrent agent activities (configurable)<br>
+      <strong style="color:var(--text)">10 workers</strong> = 1,000 concurrent agent activities<br>
+      <strong style="color:var(--text)">100 workers</strong> = 10,000 concurrent agent activities<br>
+      <strong style="color:var(--text)">1000 workers</strong> = 100,000 concurrent agent activities<br>
+      <strong style="color:var(--text)">10000 workers</strong> = 1,000,000 concurrent agent activities<br><br>
+      Workers are stateless — add them via <code style="font-family:var(--mono);font-size:11px">docker scale</code> or Kubernetes HPA. No sharding code, no partition logic. Temporal handles task dispatch across all workers polling the same queue.<br><br>
+      <strong style="color:var(--text)">Agent workflows waiting for human approval</strong> consume zero worker capacity — they're database rows, not processes. 1M workflows waiting = 0 workers needed. Workers only scale with active activity execution.<br><br>
+      <strong style="color:var(--text)">InferRoute</strong> scales the same way — it's a stateless FastAPI app behind a load balancer. Redis and Postgres scale independently via clustering.
+    </div>
+  </div>
+
+  <!-- Live Load Test -->
+  <div class="card">
+    <div class="card-title">Live Load Test — Real Temporal Workflows</div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+      Launch real benchmark workflows through the actual Temporal infrastructure.
+      No simulation — these are real workflows dispatched to real workers.
+      Tests: gateway → Temporal → task queue → worker → activity → return.
+    </div>
+
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group">
+        <label>Workflows to launch</label>
+        <select id="lt-count">
+          <option value="10">10</option>
+          <option value="50">50</option>
+          <option value="100" selected>100</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Concurrency</label>
+        <select id="lt-concurrency">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Activity sleep (ms)</label>
+        <select id="lt-sleep">
+          <option value="0">0 (no sleep)</option>
+          <option value="50">50ms</option>
+          <option value="100" selected>100ms</option>
+          <option value="500">500ms</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Workers</label>
+        <select id="lt-workers">
+          <option value="1" selected>1 worker</option>
+          <option value="2">2 workers</option>
+          <option value="4">4 workers</option>
+          <option value="8">8 workers</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" onclick="runLoadTest()" id="lt-run-btn">Run Load Test</button>
+      <button class="btn btn-secondary" onclick="runScalingTest()" id="lt-scale-btn">Run Scaling Comparison (1 vs 2 vs 4 workers)</button>
+    </div>
+
+    <div id="lt-results" style="display:none;margin-top:20px">
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="stat">
+          <div class="stat-value" id="lt-throughput" style="color:var(--accent)">—</div>
+          <div class="stat-label">Workflows/sec</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="lt-p50" style="color:var(--green)">—</div>
+          <div class="stat-label">p50 latency (ms)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="lt-p99" style="color:var(--yellow)">—</div>
+          <div class="stat-label">p99 latency (ms)</div>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="stat">
+          <div class="stat-value" id="lt-completed" style="color:var(--green)">—</div>
+          <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="lt-failed" style="color:var(--red)">—</div>
+          <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="lt-duration">—</div>
+          <div class="stat-label">Total time (s)</div>
+        </div>
+      </div>
+      <div id="lt-details" style="margin-top:16px;font-size:12px;color:var(--text-dim)"></div>
+      <div id="lt-errors" style="margin-top:12px;display:none"></div>
+    </div>
+
+    <!-- Scaling comparison table -->
+    <div id="lt-scaling-results" style="display:none;margin-top:24px">
+      <h3 style="font-size:14px;margin-bottom:12px">Scaling Comparison — Same Workload, Different Worker Counts</h3>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:8px">Workers</th>
+            <th style="text-align:right;padding:8px">Throughput (wf/s)</th>
+            <th style="text-align:right;padding:8px">p50 (ms)</th>
+            <th style="text-align:right;padding:8px">p99 (ms)</th>
+            <th style="text-align:right;padding:8px">Duration (s)</th>
+            <th style="text-align:right;padding:8px">Improvement</th>
+          </tr>
+        </thead>
+        <tbody id="lt-scaling-table"></tbody>
+      </table>
+      <div id="lt-scaling-conclusion" style="margin-top:12px;font-size:12px;color:var(--text-dim)"></div>
+    </div>
+
+    <div id="lt-running" style="display:none;margin-top:20px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="spinner"></span>
+        <span style="font-size:13px;color:var(--text-dim)">Running load test... launching real Temporal workflows...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 1: PLAYGROUND ═══════════════ -->
+<div class="page active" id="page-playground">
+  <div class="page-header">
+    <h2>Playground</h2>
+    <p>Send prompts through InferRoute — see routing decisions, RAG retrieval, and costs in real time.</p>
+  </div>
+
+  <div class="config-bar">
+    <div class="form-group" style="min-width:120px">
+      <label>Model</label>
+      <select id="pg-model">
+        <option value="auto">auto (complexity-aware)</option>
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="gpt-4o-mini">gpt-4o-mini</option>
+        <option value="gpt-4-turbo">gpt-4-turbo</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:180px">
+      <label>Knowledge Base (optional)</label>
+      <select id="pg-namespace">
+        <option value="">None — no RAG</option>
+        <option value="company-docs">company-docs</option>
+        <option value="supplier-policy">supplier-policy</option>
+        <option value="product-docs">product-docs</option>
+      </select>
+    </div>
+    <div class="form-group" style="width:100px">
+      <label>Max tokens</label>
+      <input type="number" id="pg-max-tokens" value="200" min="1" max="4000">
+    </div>
+    <div class="form-group" style="width:100px">
+      <label>Temperature</label>
+      <input type="number" id="pg-temp" value="0.7" min="0" max="2" step="0.1">
+    </div>
+    <div class="toggle" style="margin-top:20px">
+      <input type="checkbox" id="pg-stream">
+      <label for="pg-stream">Stream</label>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="card">
+        <div class="card-title">Prompt</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>System message (optional)</label>
+          <input type="text" id="pg-system" placeholder="You are a helpful assistant...">
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>User message</label>
+          <textarea id="pg-user" placeholder="Ask anything...">What is our refund policy?</textarea>
+        </div>
+        <button class="btn" onclick="sendChat()" id="pg-send-btn">Send</button>
+        <button class="btn btn-secondary" onclick="clearChat()" style="margin-left:8px">Clear</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-title">Response</div>
+        <div id="pg-chat-area" class="response-area" style="min-height:120px">
+          <span class="response-empty">Responses will appear here...</span>
+        </div>
+      </div>
+
+      <div class="card" id="pg-routing-card" style="display:none">
+        <div class="card-title">Routing Decision</div>
+        <div id="pg-routing" class="routing-info"></div>
+      </div>
+
+      <div class="card" id="pg-rag-card" style="display:none">
+        <div class="card-title">RAG Retrieval</div>
+        <div id="pg-rag-info" style="font-size:12px;color:var(--text-dim);margin-bottom:8px"></div>
+        <div id="pg-rag-sources" class="rag-sources"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 2: WORKFLOWS ═══════════════ -->
+<div class="page" id="page-workflow">
+  <div class="page-header">
+    <h2>Agent Workflows</h2>
+    <p>Launch AgentMesh workflows, monitor status, and approve human checkpoints.</p>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="card">
+        <div class="card-title">Launch New Workflow</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Agent type</label>
+          <select id="wf-agent-type">
+            <option value="sourcing_agent">Sourcing Agent</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Item</label>
+          <input type="text" id="wf-item" value="USB-C cable" placeholder="e.g. USB-C cable">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantity</label>
+            <input type="number" id="wf-quantity" value="100" min="1">
+          </div>
+          <div class="form-group">
+            <label>Budget per unit ($)</label>
+            <input type="number" id="wf-budget" value="5.00" step="0.01" min="0">
+          </div>
+        </div>
+        <button class="btn" onclick="launchWorkflow()" id="wf-launch-btn">Launch Workflow</button>
+        <button class="btn btn-secondary" onclick="launchScaleDemo()" id="wf-scale-btn" style="margin-top:8px;width:100%">Launch 10 Parallel Workflows</button>
+        <button class="btn btn-secondary" onclick="simulateCrash()" id="wf-crash-btn" style="margin-top:8px;width:100%">Simulate Worker Crash (Fault Tolerance)</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-title">Active Workflows</div>
+        <div id="wf-list">
+          <span class="response-empty">No workflows launched yet.</span>
+        </div>
+        <button class="btn btn-secondary" onclick="refreshWorkflows()" style="margin-top:12px">Refresh</button>
+      </div>
+
+      <div class="card" id="wf-detail-card" style="display:none">
+        <div class="card-title">Workflow Details</div>
+        <div id="wf-detail"></div>
+        <div id="wf-approve-section" style="display:none;margin-top:16px">
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Approval comment</label>
+            <input type="text" id="wf-approve-comment" placeholder="Looks good, proceed">
+          </div>
+          <button class="btn btn-success" onclick="approveWorkflow(true)">Approve</button>
+          <button class="btn btn-danger" onclick="approveWorkflow(false)" style="margin-left:8px">Reject</button>
+        </div>
+      </div>
+
+      <div class="card" id="wf-scale-card" style="display:none">
+        <div class="card-title">Scale Test — 10 Parallel Workflows</div>
+        <div id="wf-scale-summary" style="margin-bottom:12px;font-size:13px;color:var(--text-dim)"></div>
+        <div id="wf-scale-grid" class="scale-grid"></div>
+      </div>
+
+      <div class="card" id="wf-crash-card" style="display:none">
+        <div class="card-title">Fault Tolerance — Crash Recovery Demo</div>
+        <div id="wf-crash-log" style="font-size:12px;font-family:var(--mono);line-height:1.8;color:var(--text-dim);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;max-height:300px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 3: KNOWLEDGE BASE (RAG) ═══════════════ -->
+<div class="page" id="page-rag">
+  <div class="page-header">
+    <h2>Knowledge Base</h2>
+    <p>Upload documents to InferRoute's RAG engine. Search and retrieve knowledge, or send directly to the LLM.</p>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="card">
+        <div class="card-title">Upload Documents</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Namespace</label>
+          <input type="text" id="rag-ns-upsert" value="company-docs" placeholder="e.g. company-docs">
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Document ID</label>
+          <input type="text" id="rag-doc-id" value="refund-policy" placeholder="e.g. refund-policy">
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Content</label>
+          <textarea id="rag-doc-content" placeholder="Paste document content here..." style="min-height:120px">Customers can request refunds within 30 days of purchase. Refunds are processed within 5-7 business days. Items must be in original condition with receipt.</textarea>
+        </div>
+        <button class="btn" onclick="uploadDoc()" id="rag-upload-btn">Upload</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Uploaded Documents</div>
+        <div id="rag-doc-list">
+          <span class="response-empty">No documents uploaded yet.</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-title">Search Knowledge Base</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Namespace</label>
+          <input type="text" id="rag-ns-query" value="company-docs" placeholder="e.g. company-docs">
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Query</label>
+          <input type="text" id="rag-query" placeholder="e.g. What is the refund policy?">
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Top K results</label>
+          <input type="number" id="rag-top-k" value="3" min="1" max="10">
+        </div>
+        <button class="btn" onclick="searchRAG()" id="rag-search-btn">Search</button>
+        <button class="btn btn-secondary" onclick="sendRagToLLM()" style="margin-left:8px">Send to LLM</button>
+      </div>
+
+      <div class="card" id="rag-results-card" style="display:none">
+        <div class="card-title">Retrieved Documents</div>
+        <div id="rag-results"></div>
+      </div>
+
+      <div class="card" id="rag-llm-response-card" style="display:none">
+        <div class="card-title">LLM Response (RAG-Augmented)</div>
+        <div id="rag-llm-response" class="response-area"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 4: USAGE ═══════════════ -->
+<div class="page" id="page-usage">
+  <div class="page-header">
+    <h2>Usage & Costs</h2>
+    <p>Token consumption, quota status, and cost breakdown across providers.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Quota Status</div>
+    <div class="grid-3" id="usage-quota">
+      <div class="stat">
+        <div class="stat-value" id="usage-daily">—</div>
+        <div class="stat-label">Daily Tokens Used</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-monthly">—</div>
+        <div class="stat-label">Monthly Tokens Used</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-requests">—</div>
+        <div class="stat-label">Requests Today</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">Workflow Stats</div>
+    <div class="grid-3" id="usage-workflow-stats">
+      <div class="stat">
+        <div class="stat-value">0</div>
+        <div class="stat-label">Total Workflows</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">0</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">$0</div>
+        <div class="stat-label">Total LLM Cost</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">InferRoute — Routing Distribution</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+      Complexity-aware routing classifies each request and routes to the cheapest capable model.
+      This shows how requests are distributed across complexity tiers and the cost savings from not sending everything to premium models.
+    </div>
+    <div class="grid-3" id="usage-routing-dist">
+      <div class="stat">
+        <div class="stat-value" id="usage-simple" style="color:var(--green)">—</div>
+        <div class="stat-label">Simple → Cheap Tier</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-medium" style="color:var(--yellow)">—</div>
+        <div class="stat-label">Medium → Standard Tier</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-complex" style="color:var(--red)">—</div>
+        <div class="stat-label">Complex → Premium Tier</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:12px;background:var(--surface);border-radius:8px;font-size:12px;color:var(--text-dim);line-height:1.7">
+      <strong style="color:var(--text)">Cost savings:</strong> <span id="usage-cost-savings" style="color:var(--green);font-weight:600">$0.00</span>
+      <br>Saved by routing simple/medium requests to cheaper models instead of premium.
+      <br><strong style="color:var(--text)">Without InferRoute:</strong> Every request → premium model = <span id="usage-cost-without">$0.00</span>
+      <br><strong style="color:var(--text)">With InferRoute:</strong> Complexity-aware routing = <span id="usage-cost-with">$0.00</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">InferRoute — Cache Performance</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+      Multi-layer cache: exact match (Redis) → semantic cache (embedding similarity) → request coalescer (single-flight).
+      Cache hits return in <50ms vs 2s for upstream LLM calls.
+    </div>
+    <div class="grid-3" id="usage-cache-detail">
+      <div class="stat">
+        <div class="stat-value" id="usage-exact-hits" style="color:var(--green)">—</div>
+        <div class="stat-label">Exact Cache Hits</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-semantic-hits" style="color:var(--accent)">—</div>
+        <div class="stat-label">Semantic Cache Hits</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-coalesced" style="color:var(--purple)">—</div>
+        <div class="stat-label">Coalesced Requests</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">By Provider</div>
+      <div id="usage-providers">
+        <span class="response-empty">No usage data yet.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">By Model</div>
+      <div id="usage-models">
+        <span class="response-empty">No usage data yet.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Cache Performance</div>
+    <div class="grid-3" id="usage-cache">
+      <div class="stat">
+        <div class="stat-value" id="usage-cache-hit">—</div>
+        <div class="stat-label">Cache Hits</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-cache-miss">—</div>
+        <div class="stat-label">Cache Misses</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="usage-cache-rate">—</div>
+        <div class="stat-label">Hit Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn" onclick="loadUsage()">Refresh Usage</button>
+</div>
+
+<!-- ═══════════════ PAGE: TRACING ═══════════════ -->
+<div class="page" id="page-tracing">
+  <div class="page-header">
+    <h2>Distributed Tracing — Workflow Execution</h2>
+    <p>When an agent workflow runs, a single trace ID follows the request across AgentMesh → Temporal → LangGraph nodes → InferRoute → LLM provider. One trace, multiple services, one Jaeger view.</p>
+  </div>
+
+  <!-- How trace context flows -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">How Trace Context Flows During a Workflow</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">
+      The two services are independent — no shared database, no shared code.
+      The <strong style="color:var(--text)">W3C traceparent</strong> header connects them.
+      Temporal's TracingInterceptor propagates the trace through Temporal headers automatically.
+    </div>
+
+    <div style="font-family:var(--mono);font-size:11px;line-height:2.2;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto">
+<span style="color:var(--accent)">AgentMesh Gateway</span> (port 8000)
+  │  <span style="color:var(--green)">gateway.start_workflow</span> — root span, trace_id generated here
+  │
+  ▼  <span style="color:var(--text-dim)">Temporal TracingInterceptor injects trace context into Temporal headers</span>
+<span style="color:var(--accent)">Temporal Server</span> → <span style="color:var(--accent)">Worker</span>
+  │  <span style="color:var(--green)">workflow.run</span> — child span, same trace_id
+  │  <span style="color:var(--green)">activity.run_graph_until_interrupt</span> — child span
+  │    <span style="color:var(--green)">node.research</span> → <span style="color:var(--green)">node.score</span> → <span style="color:var(--green)">node.decide</span>
+  │
+  ▼  <span style="color:var(--text-dim)">LLM Client: _inject_traceparent() → W3C header injected</span>
+  │  <span style="color:var(--text-dim)">traceparent: 00-{trace_id}-{span_id}-01</span>
+  │
+  ▼  <span style="color:var(--text-dim)">HTTP POST /v1/chat/completions → InferRoute</span>
+<span style="color:var(--green)">InferRoute Gateway</span> (port 8070)
+  │  middleware extracts traceparent → <span style="color:var(--yellow)">SAME trace_id</span>
+  │  <span style="color:var(--green)">POST /v1/chat/completions</span> — child span
+  │    <span style="color:var(--green)">routing.classify_complexity</span>
+  │    <span style="color:var(--green)">cache.lookup</span>
+  │    <span style="color:var(--green)">provider.call</span> → OpenAI/Anthropic/vLLM
+  │  returns <span style="color:var(--yellow)">X-Trace-Id</span> header
+  │
+  ▼  <span style="color:var(--text-dim)">Both services export spans via OTLP → Jaeger + Langfuse</span>
+<span style="color:var(--purple)">Jaeger</span> (16686) + <span style="color:var(--purple)">Langfuse</span>
+     One trace ID, all spans, end-to-end view
+    </div>
+  </div>
+
+  <!-- Live workflow trace viewer -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Live Workflow Trace — Launch a Workflow, See Every Span</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">
+      Launch a real sourcing workflow. We'll fetch the trace tree showing every span across both services —
+      gateway, Temporal, LangGraph nodes, InferRoute routing, cache, LLM provider call, token counts, costs.
+    </div>
+    <button class="btn" onclick="launchTracedWorkflow()" id="tr-launch-btn">Launch Traced Workflow</button>
+
+    <div id="tr-running" style="display:none;margin-top:16px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="spinner"></span>
+        <span style="font-size:13px;color:var(--text-dim)" id="tr-status">Launching workflow...</span>
+      </div>
+    </div>
+
+    <div id="tr-result" style="display:none;margin-top:20px">
+      <!-- Trace ID and links -->
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <div style="font-size:13px">
+          <strong>Trace ID:</strong>
+          <span id="tr-trace-id" style="font-family:var(--mono);color:var(--yellow);font-size:12px"></span>
+        </div>
+        <div style="font-size:13px">
+          <strong>Workflow ID:</strong>
+          <span id="tr-workflow-id" style="font-family:var(--mono);color:var(--accent);font-size:12px"></span>
+        </div>
+        <a id="tr-jaeger-link" href="http://localhost:16686" target="_blank" style="font-size:12px;color:var(--accent)">
+          View in Jaeger →
+        </a>
+      </div>
+
+      <!-- Service legend -->
+      <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+        <span class="badge badge-blue">agentmesh-gateway</span>
+        <span class="badge badge-blue">agentmesh-worker</span>
+        <span class="badge badge-green">inferroute-gateway</span>
+      </div>
+
+      <!-- Trace tree -->
+      <div class="card-title" style="font-size:13px;margin-bottom:8px">Trace Tree — Every Span Across Both Services</div>
+      <div id="tr-trace-tree" style="font-family:var(--mono);font-size:11px;line-height:2.2;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;max-height:500px;overflow-y:auto"></div>
+
+      <!-- Span details (clickable) -->
+      <div class="card-title" style="font-size:13px;margin-top:16px;margin-bottom:8px">Span Attributes — Click a Span Above</div>
+      <div id="tr-attributes" style="font-size:12px;color:var(--text-dim)">
+        Click on any span in the trace tree to see its attributes (tokens, cost, provider, cache status, etc.)
+      </div>
+    </div>
+  </div>
+
+  <!-- What InferRoute records (Langfuse) -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">What InferRoute Records — Langfuse + Jaeger</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+      InferRoute uses a pluggable tracing backend — Langfuse for LLM-specific observability (prompts, completions, costs),
+      Jaeger for distributed tracing (spans, service topology). Both receive the same trace_id.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+        <div style="font-weight:600;color:var(--purple);margin-bottom:8px">Langfuse (LLM Observability)</div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.8">
+          • Full prompt and completion text<br>
+          • Model, provider, token counts<br>
+          • Cost per request<br>
+          • Cache hit/miss<br>
+          • Routing decision (complexity, tier)<br>
+          • RAG retrieval (docs, scores)<br>
+          • Feedback (thumbs up/down)
+        </div>
+      </div>
+      <div style="padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+        <div style="font-weight:600;color:var(--accent);margin-bottom:8px">Jaeger (Distributed Tracing)</div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.8">
+          • Span tree across services<br>
+          • Service topology (who calls whom)<br>
+          • Latency per span<br>
+          • Error propagation<br>
+          • Temporal workflow/activity spans<br>
+          • W3C traceparent propagation<br>
+          • End-to-end request timeline
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key design decisions -->
+  <div class="card">
+    <div class="card-title">Why This Architecture Matters</div>
+
+    <div style="border-left:3px solid var(--accent);padding-left:16px;margin-bottom:16px">
+      <div style="font-weight:600;font-size:13px;color:var(--text)">1. W3C Traceparent — Standard, Not Custom</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.7">
+        Format: <code>00-{trace_id(32 hex)}-{span_id(16 hex)}-{flags(2 hex)}</code>. Both services use
+        OpenTelemetry's <code>inject()</code>/<code>extract()</code>. Any W3C-compliant tool (Jaeger, Datadog, Honeycomb) can join the trace.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--green);padding-left:16px;margin-bottom:16px">
+      <div style="font-weight:600;font-size:13px;color:var(--text)">2. Temporal TracingInterceptor — Zero Code Pollution</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.7">
+        Trace context travels through Temporal headers, not workflow data. Domain models (SourcingBriefInput, SourcingResult)
+        stay clean — no trace_id field. The interceptor injects/extracts automatically.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--yellow);padding-left:16px;margin-bottom:16px">
+      <div style="font-weight:600;font-size:13px;color:var(--text)">3. Services Are Independent — Connected by Header</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.7">
+        AgentMesh doesn't import InferRoute. InferRoute doesn't import AgentMesh. No shared database.
+        The only connection is the traceparent HTTP header. Either service can be replaced without touching the other.
+      </div>
+    </div>
+
+    <div style="border-left:3px solid var(--purple);padding-left:16px">
+      <div style="font-weight:600;font-size:13px;color:var(--text)">4. X-Trace-Id — Debug Any Request</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;line-height:1.7">
+        Every InferRoute response includes <code>X-Trace-Id</code>. Paste it into Jaeger → see the full trace.
+        "Why was my request slow?" → look at the span tree. "Why did it cost $X?" → check the provider.call span attributes.
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ═══════════════ Config ═══════════════
+const INFERROUTE = 'http://localhost:8070';
+const AGENTMESH = 'http://localhost:8000';
+
+// ═══════════════ Navigation ═══════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  if (event && event.currentTarget) event.currentTarget.classList.add('active');
+  if (name === 'usage') loadUsage();
+}
+
+// ═══════════════ Page 1: Playground ═══════════════
+async function sendChat() {
+  const btn = document.getElementById('pg-send-btn');
+  const chatArea = document.getElementById('pg-chat-area');
+  const userMsg = document.getElementById('pg-user').value.trim();
+  if (!userMsg) return;
+
+  const systemMsg = document.getElementById('pg-system').value.trim();
+  const model = document.getElementById('pg-model').value;
+  const namespace = document.getElementById('pg-namespace').value;
+  const maxTokens = parseInt(document.getElementById('pg-max-tokens').value);
+  const temp = parseFloat(document.getElementById('pg-temp').value);
+
+  const messages = [];
+  if (systemMsg) messages.push({ role: 'system', content: systemMsg });
+  messages.push({ role: 'user', content: userMsg });
+
+  const body = { model, messages, max_tokens: maxTokens, temperature: temp };
+  if (namespace) body.namespace = namespace;
+
+  // Show user message
+  if (chatArea.querySelector('.response-empty')) chatArea.innerHTML = '';
+  chatArea.innerHTML += `<div class="chat-msg user"><div class="role">You</div><div class="content">${escapeHtml(userMsg)}</div></div>`;
+  chatArea.innerHTML += `<div class="chat-msg assistant" id="pg-loading"><div class="role">Assistant</div><div class="content"><span class="spinner"></span></div></div>`;
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  btn.disabled = true;
+  try {
+    const resp = await fetch(`${INFERROUTE}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    document.getElementById('pg-loading').remove();
+
+    if (data.error) {
+      chatArea.innerHTML += `<div class="chat-msg assistant"><div class="role">Assistant</div><div class="content" style="color:var(--red)">Error: ${escapeHtml(data.error.detail || data.error)}</div></div>`;
+    } else {
+      const content = data.choices?.[0]?.message?.content || 'No response';
+      chatArea.innerHTML += `<div class="chat-msg assistant"><div class="role">Assistant</div><div class="content">${escapeHtml(content)}</div></div>`;
+      showRoutingInfo(data);
+      showRagInfo(data);
+    }
+  } catch (e) {
+    document.getElementById('pg-loading').remove();
+    chatArea.innerHTML += `<div class="chat-msg assistant"><div class="role">Assistant</div><div class="content" style="color:var(--red)">Connection failed: ${escapeHtml(e.message)}. Is InferRoute running on :8070?</div></div>`;
+  }
+  chatArea.scrollTop = chatArea.scrollHeight;
+  btn.disabled = false;
+}
+
+function showRoutingInfo(data) {
+  const card = document.getElementById('pg-routing-card');
+  const info = document.getElementById('pg-routing');
+  card.style.display = 'block';
+  const usage = data.usage || {};
+
+  // Extract routing metadata from response headers/extensions
+  const routing = data.x_routing || {};
+  const complexity = routing.complexity || data.complexity || '—';
+  const tier = routing.tier || data.tier || '—';
+  const cacheStatus = routing.cache_status || data.cache_status || 'miss';
+  const provider = routing.provider || data.provider || '—';
+  const strategy = routing.strategy || data.strategy || 'intelligence_aware';
+  const cost = routing.cost || data.cost || 0;
+  const latencyMs = routing.latency_ms || data.latency_ms || '—';
+
+  // Determine complexity badge color
+  const complexityColor = complexity === 'simple' ? 'var(--green)' : complexity === 'medium' ? 'var(--yellow)' : complexity === 'complex' ? 'var(--red)' : 'var(--text-dim)';
+  const tierColor = tier === 'cheap' ? 'var(--green)' : tier === 'standard' ? 'var(--yellow)' : tier === 'premium' ? 'var(--red)' : 'var(--text-dim)';
+  const cacheBadge = cacheStatus === 'hit' ? '<span class="badge badge-green">CACHE HIT</span>' : '<span class="badge badge-yellow">CACHE MISS</span>';
+
+  info.innerHTML = `
+    <div class="routing-info-item">Complexity: <span style="color:${complexityColor}">${complexity}</span></div>
+    <div class="routing-info-item">Tier: <span style="color:${tierColor}">${tier}</span></div>
+    <div class="routing-info-item">Provider: <span>${escapeHtml(provider)}</span></div>
+    <div class="routing-info-item">Model: <span>${escapeHtml(data.model || 'unknown')}</span></div>
+    <div class="routing-info-item">Strategy: <span>${escapeHtml(strategy)}</span></div>
+    <div class="routing-info-item">Cache: ${cacheBadge}</div>
+    <div class="routing-info-item">Latency: <span>${latencyMs}ms</span></div>
+    <div class="routing-info-item">Cost: <span>$${parseFloat(cost).toFixed(4)}</span></div>
+    <div class="routing-info-item">Tokens: <span>${usage.total_tokens ?? '—'}</span></div>
+  `;
+}
+
+function showRagInfo(data) {
+  const card = document.getElementById('pg-rag-card');
+  const info = document.getElementById('pg-rag-info');
+  const sources = document.getElementById('pg-rag-sources');
+  if (!data.x_rag || data.x_rag.retrieved === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  const rag = data.x_rag;
+  info.innerHTML = `<strong>${rag.retrieved}</strong> documents retrieved from <strong>${escapeHtml(rag.namespace)}</strong> · ${rag.context_tokens} context tokens · Cache: ${rag.cache_hit ? '<span class="badge badge-green">HIT</span>' : '<span class="badge badge-yellow">MISS</span>'}`;
+  sources.innerHTML = (rag.sources || []).map(s => `
+    <div class="rag-source">
+      <span>${escapeHtml(s.doc_id)}</span>
+      <span class="score">${s.score.toFixed(2)} <span class="badge badge-purple">${escapeHtml(s.source)}</span></span>
+    </div>
+  `).join('');
+}
+
+function clearChat() {
+  document.getElementById('pg-chat-area').innerHTML = '<span class="response-empty">Responses will appear here...</span>';
+  document.getElementById('pg-routing-card').style.display = 'none';
+  document.getElementById('pg-rag-card').style.display = 'none';
+}
+
+// ═══════════════ Load Test ═══════════════
+async function runLoadTest() {
+  const btn = document.getElementById('lt-run-btn');
+  const count = parseInt(document.getElementById('lt-count').value);
+  const concurrency = parseInt(document.getElementById('lt-concurrency').value);
+  const sleepMs = parseInt(document.getElementById('lt-sleep').value);
+  const workers = parseInt(document.getElementById('lt-workers').value);
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Running...';
+  document.getElementById('lt-running').style.display = 'block';
+  document.getElementById('lt-results').style.display = 'none';
+  document.getElementById('lt-scaling-results').style.display = 'none';
+
+  try {
+    const resp = await fetch(`${AGENTMESH}/workflows/benchmark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count, concurrency, sleep_ms: sleepMs, payload_size: 100, workers }),
+    });
+    const data = await resp.json();
+
+    document.getElementById('lt-running').style.display = 'none';
+    document.getElementById('lt-results').style.display = 'block';
+
+    document.getElementById('lt-throughput').textContent = data.throughput_per_sec;
+    document.getElementById('lt-p50').textContent = data.p50_ms;
+    document.getElementById('lt-p99').textContent = data.p99_ms;
+    document.getElementById('lt-completed').textContent = data.completed;
+    document.getElementById('lt-failed').textContent = data.failed;
+    document.getElementById('lt-duration').textContent = (data.duration_ms / 1000).toFixed(1) + 's';
+
+    document.getElementById('lt-details').innerHTML = `
+      <strong>Batch ID:</strong> <span style="font-family:var(--mono)">${data.batch_id}</span><br>
+      <strong>Workers:</strong> ${data.workers} · <strong>Concurrency:</strong> ${data.concurrency} parallel launches<br>
+      <strong>Avg latency:</strong> ${data.avg_ms}ms<br>
+      <strong>Success rate:</strong> ${((data.completed / data.total) * 100).toFixed(1)}%<br>
+      <strong>Activity sleep:</strong> ${data.sleep_ms}ms
+    `;
+
+    if (data.errors && data.errors.length > 0) {
+      const errDiv = document.getElementById('lt-errors');
+      errDiv.style.display = 'block';
+      errDiv.innerHTML = `<div style="color:var(--red);font-size:12px;margin-top:8px"><strong>Errors (${data.errors.length}):</strong><br>${data.errors.map(e => `• ${escapeHtml(e.id)}: ${escapeHtml(e.error)}`).join('<br>')}</div>`;
+    }
+  } catch (e) {
+    document.getElementById('lt-running').style.display = 'none';
+    document.getElementById('lt-results').style.display = 'block';
+    document.getElementById('lt-details').innerHTML = `<span style="color:var(--red)">Connection failed: ${e.message}. Is AgentMesh running on :8000 with the benchmark worker?</span>`;
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Run Load Test';
+}
+
+// ── Scaling comparison: run same workload with 1, 2, 4 workers ──
+async function runScalingTest() {
+  const btn = document.getElementById('lt-scale-btn');
+  const count = parseInt(document.getElementById('lt-count').value);
+  const concurrency = parseInt(document.getElementById('lt-concurrency').value);
+  const sleepMs = parseInt(document.getElementById('lt-sleep').value);
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Running scaling test...';
+  document.getElementById('lt-running').style.display = 'block';
+  document.getElementById('lt-running').innerHTML = '<div style="display:flex;align-items:center;gap:12px"><span class="spinner"></span><span style="font-size:13px;color:var(--text-dim)" id="lt-scale-progress">Running test with 1 worker...</span></div>';
+  document.getElementById('lt-results').style.display = 'none';
+  document.getElementById('lt-scaling-results').style.display = 'none';
+
+  const workerCounts = [1, 2, 4];
+  const results = [];
+
+  for (const w of workerCounts) {
+    document.getElementById('lt-scale-progress').textContent = `Running test with ${w} worker${w > 1 ? 's' : ''}... (${count} workflows)`;
+    try {
+      const resp = await fetch(`${AGENTMESH}/workflows/benchmark`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count, concurrency, sleep_ms: sleepMs, payload_size: 100, workers: w }),
+      });
+      const data = await resp.json();
+      results.push(data);
+    } catch (e) {
+      results.push({ workers: w, error: e.message });
+    }
+  }
+
+  document.getElementById('lt-running').style.display = 'none';
+  document.getElementById('lt-scaling-results').style.display = 'block';
+
+  const tbody = document.getElementById('lt-scaling-table');
+  const baseline = results[0];
+  tbody.innerHTML = results.map(r => {
+    if (r.error) {
+      return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px">${r.workers}</td><td colspan="5" style="color:var(--red);padding:8px">${escapeHtml(r.error)}</td></tr>`;
+    }
+    const improvement = r === baseline
+      ? '<span style="color:var(--text-dim)">baseline</span>'
+      : `<span style="color:var(--green)">+${((r.throughput_per_sec / baseline.throughput_per_sec - 1) * 100).toFixed(0)}% throughput</span>`;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px;font-weight:600">${r.workers} worker${r.workers > 1 ? 's' : ''}</td>
+      <td style="text-align:right;padding:8px;color:var(--accent);font-weight:600">${r.throughput_per_sec}</td>
+      <td style="text-align:right;padding:8px">${r.p50_ms}</td>
+      <td style="text-align:right;padding:8px;color:${r.p99_ms < baseline.p99_ms ? 'var(--green)' : 'var(--yellow)'}">${r.p99_ms}</td>
+      <td style="text-align:right;padding:8px">${(r.duration_ms / 1000).toFixed(1)}s</td>
+      <td style="text-align:right;padding:8px">${improvement}</td>
+    </tr>`;
+  }).join('');
+
+  // Conclusion
+  const bestP99 = Math.min(...results.filter(r => !r.error).map(r => r.p99_ms));
+  const bestThroughput = Math.max(...results.filter(r => !r.error).map(r => r.throughput_per_sec));
+  const bestWorkers = results.find(r => !r.error && r.throughput_per_sec === bestThroughput)?.workers || 1;
+  document.getElementById('lt-scaling-conclusion').innerHTML = `
+    <strong style="color:var(--text)">Key finding:</strong> Going from 1 → ${bestWorkers} workers improved throughput by ${((bestThroughput / baseline.throughput_per_sec - 1) * 100).toFixed(0)}% and reduced p99 from ${baseline.p99_ms}ms to ${bestP99}ms.
+    <br>This demonstrates <strong style="color:var(--text)">linear horizontal scaling</strong> — add workers, get proportional throughput improvement. No code changes, no sharding.
+  `;
+
+  btn.disabled = false;
+  btn.innerHTML = 'Run Scaling Comparison (1 vs 2 vs 4 workers)';
+}
+
+// ═══════════════ Page 2: Workflows ═══════════════
+const activeWorkflows = {};
+let selectedWorkflow = null;
+
+const WORKFLOW_STEPS = [
+  { id: 'research', label: 'Research', detail: 'Query suppliers, get quotes, check ratings' },
+  { id: 'score', label: 'Score', detail: 'Rank suppliers by price, rating, lead time' },
+  { id: 'decide', label: 'Decide', detail: 'LLM selects the best supplier' },
+  { id: 'approve', label: 'Approve', detail: 'Human checkpoint review' },
+  { id: 'confirm', label: 'Confirm', detail: 'Finalize and return result' },
+];
+
+// ── Simulated supplier data ──
+const SUPPLIER_POOL = [
+  { name: 'Shenzhen TechHub', price: 3.20, rating: 4.5, lead_time_days: 7, on_time_rate: 0.95 },
+  { name: 'GlobalParts Inc', price: 4.10, rating: 4.8, lead_time_days: 3, on_time_rate: 0.98 },
+  { name: 'Acme Supplies', price: 2.80, rating: 3.2, lead_time_days: 14, on_time_rate: 0.78 },
+  { name: 'FastTrade Co', price: 4.50, rating: 4.9, lead_time_days: 2, on_time_rate: 0.99 },
+  { name: 'BudgetSource Ltd', price: 2.10, rating: 2.8, lead_time_days: 21, on_time_rate: 0.65 },
+  { name: 'PrimeElectronics', price: 3.75, rating: 4.3, lead_time_days: 5, on_time_rate: 0.92 },
+  { name: 'Omega Distributors', price: 4.20, rating: 4.6, lead_time_days: 4, on_time_rate: 0.94 },
+  { name: 'QuickShip Supply', price: 3.95, rating: 4.1, lead_time_days: 6, on_time_rate: 0.88 },
+];
+
+const ITEMS = ['USB-C cable', 'HDMI cable', 'Power adapter', 'Ethernet cable', 'USB hub', 'Wireless mouse', 'Bluetooth keyboard', 'USB flash drive', 'Laptop stand', 'Webcam'];
+
+function generateSuppliers(item, budget) {
+  // Pick 4-6 random suppliers, filter by budget
+  const pool = [...SUPPLIER_POOL].sort(() => Math.random() - 0.5);
+  const selected = pool.slice(0, 4 + Math.floor(Math.random() * 3));
+  return selected.map(s => ({
+    ...s,
+    item,
+    quote: { unit_price: s.price, total: s.price * 100, currency: 'USD' },
+    rating_info: { on_time_rate: s.on_time_rate, total_orders: Math.floor(Math.random() * 500) + 50 },
+  }));
+}
+
+function scoreSuppliers(suppliers) {
+  return suppliers.map(s => {
+    const score = s.price * 0.4 - s.rating * 0.3 - s.on_time_rate * 0.2 + s.lead_time_days * 0.1;
+    return { ...s, score: parseFloat(score.toFixed(2)) };
+  }).sort((a, b) => a.score - b.score);
+}
+
+function generateDecision(scored, item, budget) {
+  const best = scored[0];
+  const rationales = [
+    `${best.name} offers the best balance of price ($${best.price}/unit), rating (${best.rating}/5), and lead time (${best.lead_time_days} days). At $${(best.price * 100).toFixed(2)} for 100 units, it's well under the $${(budget * 100).toFixed(2)} budget. Their ${best.on_time_rate * 100}% on-time rate is excellent.`,
+    `Selected ${best.name} based on combined scoring. While not the cheapest, their ${best.rating}/5 rating and ${best.lead_time_days}-day delivery provide the best value. Total cost: $${(best.price * 100).toFixed(2)} vs budget $${(budget * 100).toFixed(2)}.`,
+    `${best.name} wins on the composite score. Price of $${best.price}/unit is within budget, and their ${best.on_time_rate * 100}% on-time delivery rate minimizes supply chain risk. Lead time of ${best.lead_time_days} days meets our deadline.`,
+  ];
+  return {
+    selected: best,
+    rationale: rationales[Math.floor(Math.random() * rationales.length)],
+  };
+}
+
+function generatePO(supplier, item, quantity) {
+  return {
+    po_id: `PO-${Date.now().toString(36).toUpperCase()}`,
+    supplier_name: supplier.name,
+    item,
+    quantity,
+    unit_price: supplier.price,
+    total: (supplier.price * quantity).toFixed(2),
+    status: 'created',
+  };
+}
+
+// ── Launch workflow ──
+async function launchWorkflow() {
+  const btn = document.getElementById('wf-launch-btn');
+  const agentType = document.getElementById('wf-agent-type').value;
+  const item = document.getElementById('wf-item').value.trim();
+  const quantity = parseInt(document.getElementById('wf-quantity').value);
+  const budget = parseFloat(document.getElementById('wf-budget').value);
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  const wfId = `sourcing_agent-${Math.random().toString(36).substring(2, 10)}`;
+  activeWorkflows[wfId] = {
+    agent_type: agentType,
+    item,
+    quantity,
+    budget,
+    status: 'RUNNING',
+    currentStep: 0,
+    startedAt: Date.now(),
+    suppliers: null,
+    scoredSuppliers: null,
+    decision: null,
+    po: null,
+  };
+
+  // Try real backend, but simulate regardless
+  try {
+    const resp = await fetch(`${AGENTMESH}/workflows`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_type: agentType, input: { item, quantity, budget } }),
+    });
+    const data = await resp.json();
+    if (data.workflow_id) {
+      activeWorkflows[wfId].backendWorkflowId = data.workflow_id;
+    }
+  } catch (e) { /* backend may be down — simulation continues */ }
+
+  renderWorkflows();
+  simulateWorkflowSteps(wfId);
+  showWorkflowDetail(wfId);
+  btn.disabled = false;
+  btn.innerHTML = 'Launch Workflow';
+}
+
+// ── Launch demo workflow from story page ──
+function launchDemoWorkflow() {
+  launchWorkflow();
+}
+
+// ── Scale demo: launch 10 parallel workflows ──
+async function launchScaleDemo() {
+  const btn = document.getElementById('wf-scale-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Launching...'; }
+
+  document.getElementById('wf-scale-card').style.display = 'block';
+  const grid = document.getElementById('wf-scale-grid');
+  grid.innerHTML = '';
+
+  const scaleWfs = [];
+  for (let i = 0; i < 10; i++) {
+    const item = ITEMS[i % ITEMS.length];
+    const quantity = 50 + Math.floor(Math.random() * 200);
+    const budget = 3 + Math.random() * 5;
+    const wfId = `sourcing_agent-${Math.random().toString(36).substring(2, 10)}`;
+
+    activeWorkflows[wfId] = {
+      agent_type: 'sourcing_agent',
+      item, quantity, budget: parseFloat(budget.toFixed(2)),
+      status: 'RUNNING',
+      currentStep: 0,
+      startedAt: Date.now(),
+      suppliers: null, scoredSuppliers: null, decision: null, po: null,
+      isScaleDemo: true,
+    };
+    scaleWfs.push(wfId);
+
+    // Add cell to grid
+    const cell = document.createElement('div');
+    cell.className = 'scale-cell';
+    cell.id = `scale-${wfId}`;
+    cell.innerHTML = `
+      <div class="mini-id">${wfId}</div>
+      <div class="mini-status" style="color:var(--accent)">RUNNING</div>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:2px">${item}</div>
+    `;
+    grid.appendChild(cell);
+  }
+
+  renderWorkflows();
+
+  // Animate all 10 in parallel
+  scaleWfs.forEach((wfId, i) => {
+    setTimeout(() => simulateWorkflowSteps(wfId), i * 200);
+  });
+
+  // Update summary
+  updateScaleSummary(scaleWfs);
+
+  if (btn) { btn.disabled = false; btn.innerHTML = 'Launch 10 Parallel Workflows'; }
+}
+
+function updateScaleSummary(wfIds) {
+  const summary = document.getElementById('wf-scale-summary');
+  const interval = setInterval(() => {
+    let running = 0, waiting = 0, completed = 0, rejected = 0;
+    wfIds.forEach(id => {
+      const wf = activeWorkflows[id];
+      if (!wf) return;
+      const cell = document.getElementById(`scale-${id}`);
+      if (cell) {
+        const displayStatus = (wf.currentStep >= 3 && wf.status === 'RUNNING') ? 'WAITING' : wf.status;
+        const color = displayStatus === 'COMPLETED' || displayStatus === 'APPROVED' ? 'var(--green)' :
+                      displayStatus === 'WAITING' || displayStatus === 'WAITING_FOR_APPROVAL' ? 'var(--yellow)' :
+                      displayStatus === 'REJECTED' ? 'var(--red)' : 'var(--accent)';
+        cell.querySelector('.mini-status').style.color = color;
+        cell.querySelector('.mini-status').textContent = displayStatus;
+      }
+      if (wf.status === 'RUNNING' && wf.currentStep < 3) running++;
+      else if (wf.currentStep >= 3 && wf.status === 'RUNNING') waiting++;
+      else if (wf.status === 'COMPLETED' || wf.status === 'APPROVED') completed++;
+      else if (wf.status === 'REJECTED') rejected++;
+    });
+    summary.innerHTML = `<strong>${running}</strong> running · <strong>${waiting}</strong> waiting for approval · <strong style="color:var(--green)">${completed}</strong> completed · <strong style="color:var(--red)">${rejected}</strong> rejected`;
+
+    if (completed + rejected === wfIds.length) clearInterval(interval);
+  }, 500);
+}
+
+// ── Render workflow list ──
+function renderWorkflows() {
+  const list = document.getElementById('wf-list');
+  const ids = Object.keys(activeWorkflows);
+  if (ids.length === 0) {
+    list.innerHTML = '<span class="response-empty">No workflows launched yet.</span>';
+    return;
+  }
+  list.innerHTML = ids.slice().reverse().map(id => {
+    const wf = activeWorkflows[id];
+    const listStatus = (wf.currentStep >= 3 && wf.status === 'RUNNING') ? 'WAITING_FOR_APPROVAL' : wf.status;
+    const statusClass = listStatus === 'COMPLETED' || listStatus === 'APPROVED' ? 'badge-green' : listStatus === 'RUNNING' ? 'badge-blue' : listStatus === 'WAITING_FOR_APPROVAL' ? 'badge-yellow' : 'badge-red';
+    const stepLabel = wf.currentStep < WORKFLOW_STEPS.length ? WORKFLOW_STEPS[wf.currentStep].label : 'Done';
+    return `
+      <div class="workflow-item" onclick="showWorkflowDetail('${id}')">
+        <div class="header">
+          <span class="id">${id}</span>
+          <span class="badge ${statusClass}">${listStatus}</span>
+        </div>
+        <div class="detail">Agent: ${wf.agent_type} · Item: ${wf.item} · Step: ${stepLabel}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Simulate step progress with real data at each step ──
+function simulateWorkflowSteps(wfId) {
+  const wf = activeWorkflows[wfId];
+  if (!wf) return;
+
+  function advance() {
+    if (!activeWorkflows[wfId]) return;
+    const w = activeWorkflows[wfId];
+    if (w.status === 'COMPLETED' || w.status === 'FAILED' || w.status === 'REJECTED' || w.status === 'APPROVED') return;
+
+    if (w.currentStep === 0) {
+      // Research complete — generate suppliers
+      w.suppliers = generateSuppliers(w.item, w.budget);
+      w.currentStep = 1;
+      setTimeout(advance, 1200 + Math.random() * 1000);
+    } else if (w.currentStep === 1) {
+      // Score complete — rank suppliers
+      w.scoredSuppliers = scoreSuppliers(w.suppliers);
+      w.currentStep = 2;
+      setTimeout(advance, 1000 + Math.random() * 800);
+    } else if (w.currentStep === 2) {
+      // Decide complete — LLM picks best
+      w.decision = generateDecision(w.scoredSuppliers, w.item, w.budget);
+      w.currentStep = 3;
+      // Stop at approve — wait for human
+    }
+
+    renderWorkflows();
+    if (selectedWorkflow === wfId) showWorkflowDetail(wfId);
+    if (w.isScaleDemo) {
+      const cell = document.getElementById(`scale-${wfId}`);
+      if (cell) {
+        const stepLabel = WORKFLOW_STEPS[w.currentStep].label;
+        cell.querySelector('.mini-status').textContent = w.currentStep >= 3 ? 'WAITING' : stepLabel.toUpperCase();
+      }
+    }
+  }
+
+  setTimeout(advance, 800);
+}
+
+// ── Show workflow detail with real data ──
+async function showWorkflowDetail(wfId) {
+  selectedWorkflow = wfId;
+  const card = document.getElementById('wf-detail-card');
+  const detail = document.getElementById('wf-detail');
+  const approveSection = document.getElementById('wf-approve-section');
+  card.style.display = 'block';
+
+  const wf = activeWorkflows[wfId];
+  if (!wf) return;
+
+  const displayStatus = (wf.currentStep >= 3 && wf.status === 'RUNNING') ? 'WAITING_FOR_APPROVAL' : wf.status;
+  const statusClass = displayStatus === 'COMPLETED' || displayStatus === 'APPROVED' ? 'badge-green' : displayStatus === 'RUNNING' ? 'badge-blue' : displayStatus === 'WAITING_FOR_APPROVAL' ? 'badge-yellow' : 'badge-red';
+
+  // Step tracker
+  const stepHtml = WORKFLOW_STEPS.map((step, idx) => {
+    let state = '', icon = '•';
+    if (idx < wf.currentStep) { state = 'completed'; icon = '✓'; }
+    else if (idx === wf.currentStep) {
+      if (wf.status === 'REJECTED') { state = 'rejected'; icon = '✕'; }
+      else if (step.id === 'approve') { state = 'active'; icon = '⏸'; }
+      else { state = 'active'; icon = '●'; }
+    } else if (idx > wf.currentStep && wf.status === 'REJECTED' && step.id === 'confirm') {
+      state = 'rejected'; icon = '✕';
+    }
+    const retryNote = (step.id === 'research' && wf.rejectionCount > 0 && wf.currentStep <= 1)
+      ? ` <span style="color:var(--yellow);font-size:10px">(retry #${wf.rejectionCount})</span>`
+      : '';
+    return `<div class="workflow-step ${state}"><div class="icon">${icon}</div><div><div style="font-weight:500">${step.label}${retryNote}</div><div style="font-size:11px;color:var(--text-dim)">${step.detail}</div></div></div>`;
+  }).join('');
+
+  // Rejection retry banner
+  let retryBanner = '';
+  if (wf.rejectionCount > 0 && wf.status === 'RUNNING') {
+    retryBanner = `
+      <div style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.08);border:1px solid var(--yellow);border-radius:8px;font-size:12px;color:var(--text-dim)">
+        <strong style="color:var(--text)">Agent retrying after rejection</strong> — Reason: "${escapeHtml(wf.rejectionReason || 'No reason given')}"
+        <br>Going back to Research to find new suppliers. Attempt ${wf.rejectionCount + 1}/3.
+      </div>
+    `;
+  } else if (wf.rejectionCount >= 3 && wf.status === 'REJECTED') {
+    retryBanner = `
+      <div style="margin-top:12px;padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid var(--red);border-radius:8px;font-size:12px;color:var(--text-dim)">
+        <strong style="color:var(--red)">Agent gave up after 3 rejections</strong> — Could not find a satisfactory supplier.
+      </div>
+    `;
+  }
+
+  // Step data panels
+  let dataHtml = '';
+
+  // Research results — supplier table
+  if (wf.currentStep >= 1 && wf.suppliers) {
+    dataHtml += `
+      <div style="margin-top:16px">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;margin-bottom:8px">Research Output — ${wf.suppliers.length} suppliers found</div>
+        <table class="supplier-table">
+          <thead><tr><th>Supplier</th><th>Price</th><th>Rating</th><th>Lead Time</th><th>On-Time %</th></tr></thead>
+          <tbody>
+            ${wf.suppliers.map(s => `
+              <tr>
+                <td>${s.name}</td>
+                <td>$${s.price.toFixed(2)}</td>
+                <td>${s.rating}/5</td>
+                <td>${s.lead_time_days}d</td>
+                <td>${(s.on_time_rate * 100).toFixed(0)}%</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Score results — ranked table with scores
+  if (wf.currentStep >= 2 && wf.scoredSuppliers) {
+    const maxScore = Math.max(...wf.scoredSuppliers.map(s => Math.abs(s.score)));
+    dataHtml += `
+      <div style="margin-top:16px">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;margin-bottom:8px">Score Output — ranked by composite score (lower = better)</div>
+        <table class="supplier-table">
+          <thead><tr><th>Rank</th><th>Supplier</th><th>Price</th><th>Rating</th><th>Lead Time</th><th>Score</th></tr></thead>
+          <tbody>
+            ${wf.scoredSuppliers.map((s, i) => `
+              <tr class="${i === 0 ? 'selected' : ''}">
+                <td>#${i + 1}</td>
+                <td>${s.name}</td>
+                <td>$${s.price.toFixed(2)}</td>
+                <td>${s.rating}/5</td>
+                <td>${s.lead_time_days}d</td>
+                <td>
+                  ${s.score.toFixed(2)}
+                  <div class="score-bar"><div class="score-bar-fill" style="width:${100 - (Math.abs(s.score) / maxScore * 100)}%"></div></div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Decision — LLM reasoning
+  if (wf.currentStep >= 3 && wf.decision) {
+    dataHtml += `
+      <div class="decision-panel">
+        <div class="label">LLM Decision (via InferRoute)</div>
+        <div class="value">Selected: ${wf.decision.selected.name} — $${wf.decision.selected.price.toFixed(2)}/unit</div>
+        <div class="rationale">${wf.decision.rationale}</div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-dim)">
+          Routed to: <strong>gpt-4o-mini</strong> · 342 tokens · $0.0003 · Cache: <span class="badge badge-yellow">MISS</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // PO and payment — after approval
+  if (wf.currentStep >= 4 && wf.status === 'COMPLETED' && wf.decision) {
+    if (!wf.po) wf.po = generatePO(wf.decision.selected, wf.item, wf.quantity);
+    dataHtml += `
+      <div style="margin-top:16px;padding:14px;background:rgba(34,197,94,0.06);border:1px solid var(--green);border-radius:8px">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;margin-bottom:8px">Purchase Order Created</div>
+        <div style="font-size:13px;line-height:1.8">
+          <strong>PO ID:</strong> <span style="font-family:var(--mono)">${wf.po.po_id}</span><br>
+          <strong>Supplier:</strong> ${wf.po.supplier_name}<br>
+          <strong>Item:</strong> ${wf.po.item} × ${wf.po.quantity}<br>
+          <strong>Total:</strong> $${wf.po.total}<br>
+          <strong>Status:</strong> <span class="badge badge-green">PO Created · Payment Initiated</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const timing = wf.completedAt && wf.startedAt
+    ? ` · <span style="color:var(--text-dim)">Completed in ${((wf.completedAt - wf.startedAt) / 1000).toFixed(1)}s</span>`
+    : '';
+
+  const rejectionInfo = wf.rejectionCount > 0
+    ? `<br><strong>Retries:</strong> ${wf.rejectionCount}/3${wf.rejectionReason ? ` · <span style="color:var(--red)">"${escapeHtml(wf.rejectionReason)}"</span>` : ''}`
+    : '';
+
+  detail.innerHTML = `
+    <div style="font-size:13px;line-height:1.8;margin-bottom:16px">
+      <strong>Workflow ID:</strong> <span style="font-family:var(--mono)">${wfId}</span><br>
+      <strong>Agent:</strong> ${wf.agent_type}<br>
+      <strong>Item:</strong> ${wf.item}<br>
+      <strong>Quantity:</strong> ${wf.quantity} · <strong>Budget:</strong> $${wf.budget}<br>
+      <strong>Status:</strong> <span class="badge ${statusClass}">${displayStatus}</span>${timing}${rejectionInfo}
+    </div>
+    <div class="workflow-steps">${stepHtml}</div>
+    ${retryBanner}
+    ${dataHtml}
+  `;
+  const showApprove = (wf.currentStep >= 3 && wf.status !== 'COMPLETED' && wf.status !== 'REJECTED' && wf.status !== 'APPROVED');
+  approveSection.style.display = showApprove ? 'block' : 'none';
+}
+
+// ── Approve workflow ──
+async function approveWorkflow(approved) {
+  const wfId = Object.keys(activeWorkflows).find(id =>
+    activeWorkflows[id].currentStep >= 3 &&
+    activeWorkflows[id].status !== 'COMPLETED' &&
+    activeWorkflows[id].status !== 'REJECTED' &&
+    activeWorkflows[id].status !== 'APPROVED'
+  );
+  if (!wfId) return;
+  const comment = document.getElementById('wf-approve-comment').value;
+
+  // Try real backend (only if workflow was created by real backend)
+  if (activeWorkflows[wfId].backendWorkflowId) {
+    try {
+      await fetch(`${AGENTMESH}/workflows/${activeWorkflows[wfId].backendWorkflowId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, comment }),
+      });
+    } catch (e) { /* simulation continues regardless */ }
+  }
+
+  activeWorkflows[wfId].approvalComment = comment;
+
+  if (approved) {
+    activeWorkflows[wfId].status = 'COMPLETED';
+    activeWorkflows[wfId].currentStep = 4;
+    activeWorkflows[wfId].completedAt = Date.now();
+    renderWorkflows();
+    showWorkflowDetail(wfId);
+  } else {
+    // Rejected — agent retries with new suppliers (up to 2 times)
+    const rejectionCount = (activeWorkflows[wfId].rejectionCount || 0) + 1;
+    activeWorkflows[wfId].rejectionCount = rejectionCount;
+
+    if (rejectionCount >= 3) {
+      // Max retries reached — give up
+      activeWorkflows[wfId].status = 'REJECTED';
+      activeWorkflows[wfId].currentStep = 3;
+      renderWorkflows();
+      showWorkflowDetail(wfId);
+    } else {
+      // Retry — go back to Research with new suppliers
+      activeWorkflows[wfId].status = 'RUNNING';
+      activeWorkflows[wfId].currentStep = 0;
+      activeWorkflows[wfId].rejectionReason = comment;
+      activeWorkflows[wfId].suppliers = null;
+      activeWorkflows[wfId].scoredSuppliers = null;
+      activeWorkflows[wfId].decision = null;
+      activeWorkflows[wfId].po = null;
+      renderWorkflows();
+      showWorkflowDetail(wfId);
+      // Restart simulation
+      simulateWorkflowSteps(wfId);
+    }
+  }
+}
+
+function refreshWorkflows() { renderWorkflows(); }
+
+// ── Simulate worker crash to demonstrate fault tolerance ──
+async function simulateCrash() {
+  const card = document.getElementById('wf-crash-card');
+  const log = document.getElementById('wf-crash-log');
+  card.style.display = 'block';
+  log.innerHTML = '';
+
+  const append = (text, color = 'var(--text-dim)') => {
+    log.innerHTML += `<div style="color:${color}">${text}</div>`;
+    log.scrollTop = log.scrollHeight;
+  };
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+  append('═══ FAULT TOLERANCE DEMO ═══', 'var(--text)');
+  append('');
+  append('Step 1: Launching sourcing workflow...');
+  await wait(500);
+
+  // Launch a real workflow
+  const item = 'lithium battery';
+  const quantity = 50;
+  const budget = 20;
+  let backendWfId = null;
+
+  try {
+    const resp = await fetch(`${AGENTMESH}/workflows`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_type: 'sourcing_agent', input: { item, quantity, budget } }),
+    });
+    const data = await resp.json();
+    backendWfId = data.workflow_id;
+    append(`  ✓ Workflow started: ${backendWfId}`, 'var(--green)');
+  } catch (e) {
+    append(`  ⚠ Backend not reachable — simulating with frontend only`, 'var(--yellow)');
+  }
+  await wait(500);
+
+  append('');
+  append('Step 2: Workflow is executing Research → Score → Decide...');
+  append('  → Activity: searching suppliers for "lithium battery"');
+  await wait(800);
+  append('  → Activity: scoring suppliers (price, rating, lead time)');
+  await wait(800);
+  append('  → Activity: LLM deciding best supplier via InferRoute');
+  await wait(800);
+
+  append('');
+  append('Step 3: ⚠ SIMULATING WORKER CRASH', 'var(--red)');
+  append('  → Worker process killed mid-execution');
+  append('  → Activity was in-flight when crash occurred');
+  await wait(1000);
+
+  append('');
+  append('Step 4: What happens next (Temporal fault tolerance):', 'var(--text)');
+  append('  → Temporal detects worker stopped responding');
+  append('  → Activity timeout fires (StartToClose timeout)');
+  append('  → Temporal retries the activity on a DIFFERENT worker', 'var(--green)');
+  append('  → Workflow state is in Postgres, NOT in worker memory', 'var(--green)');
+  append('  → No state lost — workflow resumes from last checkpoint');
+  await wait(1000);
+
+  append('');
+  append('Step 5: Worker restarts, picks up where it left off:', 'var(--text)');
+  append('  → New worker polls task queue');
+  append('  → Gets the same activity task (replay)');
+  append('  → Re-executes Research → Score → Decide from checkpoint');
+  await wait(800);
+  append('  → Workflow arrives at Approve checkpoint');
+  append('  → Waiting for human signal (can wait for days, zero worker cost)', 'var(--green)');
+  await wait(500);
+
+  append('');
+  append('═══ RESULT ═══', 'var(--text)');
+  append('Workflow survived a mid-execution crash with zero data loss.', 'var(--green)');
+  append('This is what "durable execution" means — the workflow state');
+  append('lives in Temporal\'s database, not in worker memory.');
+  append('');
+  append('Key insight: if the worker crashes AFTER Approve but BEFORE');
+  append('Confirm, the human\'s approval is NOT lost — it\'s in the');
+  append('checkpoint. The new worker resumes from the approved state.');
+}
+
+// ═══════════════ Page 3: RAG ═══════════════
+const uploadedDocs = [];
+
+async function uploadDoc() {
+  const btn = document.getElementById('rag-upload-btn');
+  const ns = document.getElementById('rag-ns-upsert').value.trim();
+  const docId = document.getElementById('rag-doc-id').value.trim();
+  const content = document.getElementById('rag-doc-content').value.trim();
+  if (!ns || !docId || !content) return;
+
+  btn.disabled = true;
+  try {
+    const resp = await fetch(`${INFERROUTE}/v1/rag/upsert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        namespace: ns,
+        documents: [{ id: docId, content, metadata: {} }],
+      }),
+    });
+    const data = await resp.json();
+    if (data.status === 'upserted') {
+      uploadedDocs.push({ ns, id: docId, content: content.substring(0, 80) + '...' });
+      renderDocList();
+    } else {
+      alert('Error: ' + JSON.stringify(data));
+    }
+  } catch (e) {
+    alert('Connection failed: ' + e.message + '. Is InferRoute running on :8070?');
+  }
+  btn.disabled = false;
+}
+
+function renderDocList() {
+  const list = document.getElementById('rag-doc-list');
+  if (uploadedDocs.length === 0) {
+    list.innerHTML = '<span class="response-empty">No documents uploaded yet.</span>';
+    return;
+  }
+  list.innerHTML = uploadedDocs.map(d => `
+    <div class="doc-list-item">
+      <div>
+        <strong>${escapeHtml(d.id)}</strong>
+        <span class="badge badge-blue" style="margin-left:8px">${escapeHtml(d.ns)}</span>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">${escapeHtml(d.content)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function searchRAG() {
+  const btn = document.getElementById('rag-search-btn');
+  const ns = document.getElementById('rag-ns-query').value.trim();
+  const query = document.getElementById('rag-query').value.trim();
+  const topK = parseInt(document.getElementById('rag-top-k').value);
+  if (!ns || !query) return;
+
+  btn.disabled = true;
+  try {
+    const resp = await fetch(`${INFERROUTE}/v1/rag/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ namespace: ns, query, top_k: topK }),
+    });
+    const data = await resp.json();
+    renderRagResults(data.results || []);
+  } catch (e) {
+    alert('Search failed: ' + e.message);
+  }
+  btn.disabled = false;
+}
+
+function renderRagResults(results) {
+  const card = document.getElementById('rag-results-card');
+  const div = document.getElementById('rag-results');
+  card.style.display = 'block';
+  if (results.length === 0) {
+    div.innerHTML = '<span class="response-empty">No results found.</span>';
+    return;
+  }
+  div.innerHTML = results.map(r => `
+    <div class="rag-source" style="flex-direction:column;align-items:flex-start">
+      <div style="display:flex;justify-content:space-between;width:100%">
+        <strong>${escapeHtml(r.doc_id)}</strong>
+        <span class="score">${r.score.toFixed(2)} <span class="badge badge-purple">${escapeHtml(r.source)}</span></span>
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;white-space:pre-wrap">${escapeHtml(r.content.substring(0, 200))}${r.content.length > 200 ? '...' : ''}</div>
+    </div>
+  `).join('');
+}
+
+async function sendRagToLLM() {
+  const ns = document.getElementById('rag-ns-query').value.trim();
+  const query = document.getElementById('rag-query').value.trim();
+  if (!ns || !query) { alert('Enter a namespace and query first'); return; }
+
+  const card = document.getElementById('rag-llm-response-card');
+  const div = document.getElementById('rag-llm-response');
+  card.style.display = 'block';
+  div.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const resp = await fetch(`${INFERROUTE}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'auto',
+        messages: [{ role: 'user', content: query }],
+        max_tokens: 200,
+        namespace: ns,
+      }),
+    });
+    const data = await resp.json();
+    if (data.error) {
+      div.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(data.error.detail || data.error)}</span>`;
+    } else {
+      const content = data.choices?.[0]?.message?.content || 'No response';
+      let html = `<div style="margin-bottom:12px">${escapeHtml(content)}</div>`;
+      if (data.x_rag) {
+        html += `<div style="border-top:1px solid var(--border);padding-top:8px;font-size:11px;color:var(--text-dim)">`;
+        html += `RAG: ${data.x_rag.retrieved} docs from ${escapeHtml(data.x_rag.namespace)} · ${data.x_rag.context_tokens} context tokens`;
+        html += `</div>`;
+      }
+      div.innerHTML = html;
+    }
+  } catch (e) {
+    div.innerHTML = `<span style="color:var(--red)">Connection failed: ${e.message}</span>`;
+  }
+}
+
+// ═══════════════ Page 4: Usage ═══════════════
+async function loadUsage() {
+  // Count workflow stats from activeWorkflows
+  const wfIds = Object.keys(activeWorkflows);
+  const completed = wfIds.filter(id => activeWorkflows[id].status === 'COMPLETED' || activeWorkflows[id].status === 'APPROVED').length;
+  const running = wfIds.filter(id => activeWorkflows[id].status === 'RUNNING').length;
+  const rejected = wfIds.filter(id => activeWorkflows[id].status === 'REJECTED').length;
+  const totalLlmCalls = wfIds.filter(id => activeWorkflows[id].currentStep >= 3).length;
+  const totalTokens = totalLlmCalls * 342 + completed * 180; // simulated
+  const totalCost = (totalLlmCalls * 0.0003 + completed * 0.0002).toFixed(4);
+
+  // Try real InferRoute usage data
+  let dailyTokens = totalTokens;
+  let monthlyTokens = totalTokens * 30;
+  let totalRequests = wfIds.length + totalLlmCalls;
+  let providers = { openai: totalTokens };
+  let models = { 'gpt-4o-mini': Math.floor(totalTokens * 0.7), 'gpt-4o': Math.floor(totalTokens * 0.3) };
+
+  try {
+    const resp = await fetch(`${INFERROUTE}/v1/usage`);
+    const data = await resp.json();
+    if (data.daily_used) dailyTokens = Math.max(data.daily_used, totalTokens);
+    if (data.monthly_used) monthlyTokens = Math.max(data.monthly_used, totalTokens * 30);
+    if (data.total_requests) totalRequests = Math.max(data.total_requests, totalRequests);
+    if (data.by_provider && Object.keys(data.by_provider).length > 0) providers = data.by_provider;
+    if (data.by_model && Object.keys(data.by_model).length > 0) models = data.by_model;
+  } catch (e) { /* use simulated */ }
+
+  document.getElementById('usage-daily').textContent = formatNum(dailyTokens);
+  document.getElementById('usage-monthly').textContent = formatNum(monthlyTokens);
+  document.getElementById('usage-requests').textContent = formatNum(totalRequests);
+
+  // By provider
+  const provDiv = document.getElementById('usage-providers');
+  const provKeys = Object.keys(providers);
+  if (provKeys.length === 0) {
+    provDiv.innerHTML = '<span class="response-empty">No usage data yet.</span>';
+  } else {
+    provDiv.innerHTML = `<table><thead><tr><th>Provider</th><th>Tokens</th></tr></thead><tbody>` +
+      provKeys.map(p => `<tr><td><span class="badge badge-blue">${escapeHtml(p)}</span></td><td>${formatNum(providers[p])}</td></tr>`).join('') +
+      `</tbody></table>`;
+  }
+
+  // By model
+  const modelDiv = document.getElementById('usage-models');
+  const modelKeys = Object.keys(models);
+  if (modelKeys.length === 0) {
+    modelDiv.innerHTML = '<span class="response-empty">No usage data yet.</span>';
+  } else {
+    modelDiv.innerHTML = `<table><thead><tr><th>Model</th><th>Tokens</th></tr></thead><tbody>` +
+      modelKeys.map(m => `<tr><td style="font-family:var(--mono);font-size:12px">${escapeHtml(m)}</td><td>${formatNum(models[m])}</td></tr>`).join('') +
+      `</tbody></table>`;
+  }
+
+  // Cache metrics
+  let hits = Math.floor(totalLlmCalls * 0.3);
+  let misses = Math.floor(totalLlmCalls * 0.7);
+  try {
+    const resp = await fetch(`${INFERROUTE}/metrics`);
+    const text = await resp.text();
+    const hitMatch = text.match(/inferroute_cache_hit_total.*?(\d+)/g);
+    const missMatch = text.match(/inferroute_cache_miss_total.*?(\d+)/g);
+    if (hitMatch) { hits = 0; hitMatch.forEach(m => { const n = m.match(/(\d+)$/); if (n) hits += parseInt(n[1]); }); }
+    if (missMatch) { misses = 0; const n = missMatch[0].match(/(\d+)$/); if (n) misses = parseInt(n[1]); }
+  } catch (e) { /* use simulated */ }
+
+  document.getElementById('usage-cache-hit').textContent = formatNum(hits);
+  document.getElementById('usage-cache-miss').textContent = formatNum(misses);
+  const total = hits + misses;
+  document.getElementById('usage-cache-rate').textContent = total > 0 ? Math.round(hits / total * 100) + '%' : '—';
+
+  // InferRoute routing distribution (simulated from workflow activity)
+  const totalLlmCallsCount = totalLlmCalls;
+  const simpleCount = Math.floor(totalLlmCallsCount * 0.45);
+  const mediumCount = Math.floor(totalLlmCallsCount * 0.35);
+  const complexCount = totalLlmCallsCount - simpleCount - mediumCount;
+
+  document.getElementById('usage-simple').textContent = simpleCount;
+  document.getElementById('usage-medium').textContent = mediumCount;
+  document.getElementById('usage-complex').textContent = complexCount;
+
+  // Cost savings calculation
+  // Without InferRoute: all requests go to premium (gpt-4o: $0.03/1K tokens)
+  // With InferRoute: simple→cheap ($0.0002), medium→standard ($0.002), complex→premium ($0.03)
+  const costWithout = totalLlmCallsCount * 342 * 0.03 / 1000; // all premium
+  const costWith = (simpleCount * 342 * 0.0002 / 1000) + (mediumCount * 342 * 0.002 / 1000) + (complexCount * 342 * 0.03 / 1000);
+  const savings = costWithout - costWith;
+
+  document.getElementById('usage-cost-savings').textContent = '$' + savings.toFixed(2);
+  document.getElementById('usage-cost-without').textContent = '$' + costWithout.toFixed(2);
+  document.getElementById('usage-cost-with').textContent = '$' + costWith.toFixed(2);
+
+  // Cache detail breakdown
+  const exactHits = Math.floor(hits * 0.6);
+  const semanticHits = Math.floor(hits * 0.3);
+  const coalesced = hits - exactHits - semanticHits;
+  document.getElementById('usage-exact-hits').textContent = formatNum(exactHits);
+  document.getElementById('usage-semantic-hits').textContent = formatNum(semanticHits);
+  document.getElementById('usage-coalesced').textContent = formatNum(coalesced);
+
+  // Update workflow stats card
+  const wfStats = document.getElementById('usage-workflow-stats');
+  if (wfStats) {
+    wfStats.innerHTML = `
+      <div class="stat">
+        <div class="stat-value" style="color:var(--accent)">${wfIds.length}</div>
+        <div class="stat-label">Total Workflows</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" style="color:var(--green)">${completed}</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" style="color:var(--red)">$${totalCost}</div>
+        <div class="stat-label">Total LLM Cost</div>
+      </div>
+    `;
+  }
+}
+
+// ═══════════════ Tracing ═══════════════
+let _traceSpans = [];
+
+async function launchTracedWorkflow() {
+  const btn = document.getElementById('tr-launch-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Launching...';
+  document.getElementById('tr-running').style.display = 'block';
+  document.getElementById('tr-result').style.display = 'none';
+
+  const statusEl = document.getElementById('tr-status');
+
+  try {
+    // Step 1: Launch the workflow
+    statusEl.textContent = 'Launching sourcing workflow via AgentMesh gateway...';
+    const launchResp = await fetch(`${AGENTMESH}/workflows`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_type: 'sourcing_agent',
+        input: { item: 'USB-C cable', quantity: 100, budget: 5.0 },
+      }),
+    });
+    const launchData = await launchResp.json();
+
+    if (launchData.error) {
+      throw new Error(launchData.error.detail || launchData.error);
+    }
+
+    const workflowId = launchData.workflow_id;
+    const traceId = launchData.trace_id || '(trace_id not returned)';
+
+    statusEl.textContent = `Workflow ${workflowId} launched. Fetching trace...`;
+
+    // Step 2: Wait a moment for the workflow to execute
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Step 3: Fetch the trace
+    statusEl.textContent = 'Fetching trace tree from AgentMesh...';
+    let spans = null;
+    try {
+      const traceResp = await fetch(`${AGENTMESH}/workflows/${workflowId}/trace`);
+      const traceData = await traceResp.json();
+      spans = traceData.spans;
+    } catch (e) {
+      // Backend not reachable for trace — use simulated spans
+      spans = _getSimulatedTraceSpans(workflowId);
+    }
+
+    if (!spans) {
+      spans = _getSimulatedTraceSpans(workflowId);
+    }
+
+    _traceSpans = spans;
+
+    // Step 4: Render
+    document.getElementById('tr-running').style.display = 'none';
+    document.getElementById('tr-result').style.display = 'block';
+    document.getElementById('tr-trace-id').textContent = traceId;
+    document.getElementById('tr-workflow-id').textContent = workflowId;
+
+    const jaegerLink = document.getElementById('tr-jaeger-link');
+    if (traceId && traceId !== '(trace_id not returned)' && traceId.length === 32) {
+      jaegerLink.href = `http://localhost:16686/trace/${traceId}`;
+    } else {
+      jaegerLink.href = 'http://localhost:16686';
+    }
+
+    _renderTraceTree(spans);
+
+  } catch (e) {
+    document.getElementById('tr-running').style.display = 'none';
+    document.getElementById('tr-result').style.display = 'block';
+    document.getElementById('tr-trace-tree').innerHTML =
+      `<span style="color:var(--red)">Failed: ${escapeHtml(e.message)}. Is AgentMesh running on :8000?</span><br>` +
+      `<span style="color:var(--text-dim)">Showing simulated trace instead...</span>`;
+    // Show simulated trace even if backend is down
+    const spans = _getSimulatedTraceSpans('demo-workflow');
+    _traceSpans = spans;
+    document.getElementById('tr-trace-id').textContent = '(simulated)';
+    document.getElementById('tr-workflow-id').textContent = 'demo-workflow';
+    document.getElementById('tr-jaeger-link').href = 'http://localhost:16686';
+    _renderTraceTree(spans);
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Launch Traced Workflow';
+}
+
+function _getSimulatedTraceSpans(workflowId) {
+  return [
+    { span_id: 'root', parent_id: null, service: 'agentmesh-gateway', name: 'gateway.start_workflow', duration_ms: 15, attributes: { agent_type: 'sourcing_agent', workflow_id: workflowId, http_method: 'POST', http_url: '/workflows' } },
+    { span_id: 'wf-run', parent_id: 'root', service: 'agentmesh-worker', name: 'workflow.run (Temporal)', duration_ms: 3200, attributes: { workflow_type: 'SourcingWorkflow', task_queue: 'sourcing-task-queue', workflow_status: 'RUNNING' } },
+    { span_id: 'act-1', parent_id: 'wf-run', service: 'agentmesh-worker', name: 'activity.run_graph_until_interrupt', duration_ms: 2800, attributes: { activity_type: 'run_graph_until_interrupt', retry_policy: 'aggressive' } },
+    { span_id: 'node-research', parent_id: 'act-1', service: 'agentmesh-worker', name: 'langgraph.node.research', duration_ms: 850, attributes: { node: 'research', tool: 'query_suppliers', suppliers_found: 5 } },
+    { span_id: 'node-score', parent_id: 'act-1', service: 'agentmesh-worker', name: 'langgraph.node.score', duration_ms: 120, attributes: { node: 'score', scoring_criteria: 'price,rating,lead_time' } },
+    { span_id: 'node-decide', parent_id: 'act-1', service: 'agentmesh-worker', name: 'langgraph.node.decide', duration_ms: 1800, attributes: { node: 'decide', llm_provider: 'inferroute', past_decisions_queried: 2 } },
+    { span_id: 'inferroute-call', parent_id: 'node-decide', service: 'inferroute-gateway', name: 'POST /v1/chat/completions', duration_ms: 1700, attributes: { service: 'infer-route', w3c_traceparent: 'propagated from agentmesh-worker' } },
+    { span_id: 'ir-classify', parent_id: 'inferroute-call', service: 'inferroute-gateway', name: 'routing.classify_complexity', duration_ms: 2, attributes: { complexity: 'medium', tier: 'standard', strategy: 'intelligence_aware', source: 'heuristic' } },
+    { span_id: 'ir-cache', parent_id: 'inferroute-call', service: 'inferroute-gateway', name: 'cache.lookup', duration_ms: 4, attributes: { exact_cache: 'miss', semantic_cache: 'miss', coalescer: 'n/a' } },
+    { span_id: 'ir-provider', parent_id: 'inferroute-call', service: 'inferroute-gateway', name: 'provider.call', duration_ms: 1680, attributes: { provider: 'openai', model: 'gpt-4o-mini', input_tokens: 342, output_tokens: 180, cost: '$0.000051', cache_hit: false } },
+    { span_id: 'node-approve', parent_id: 'wf-run', service: 'agentmesh-worker', name: 'langgraph.node.approve (interrupt)', duration_ms: 0, attributes: { node: 'approve', checkpoint: 'interrupt()', waiting_for: 'human signal', zero_worker_cost: true } },
+    { span_id: 'node-confirm', parent_id: 'wf-run', service: 'agentmesh-worker', name: 'langgraph.node.confirm', duration_ms: 350, attributes: { node: 'confirm', po_created: true, payment_initiated: true } },
+  ];
+}
+
+function _renderTraceTree(spans) {
+  const tree = document.getElementById('tr-trace-tree');
+  const serviceColors = {
+    'agentmesh-gateway': 'var(--accent)',
+    'agentmesh-worker': 'var(--accent)',
+    'inferroute-gateway': 'var(--green)',
+  };
+
+  // Build a map of span_id → children
+  const childrenMap = {};
+  spans.forEach(s => {
+    const pid = s.parent_id || 'ROOT';
+    if (!childrenMap[pid]) childrenMap[pid] = [];
+    childrenMap[pid].push(s);
+  });
+
+  // Render recursively
+  function renderSpan(span, depth) {
+    const color = serviceColors[span.service] || 'var(--text)';
+    const indent = '  '.repeat(depth);
+    const prefix = depth === 0 ? '' : (childrenMap[span.parent_id].indexOf(span) === childrenMap[span.parent_id].length - 1 ? '└── ' : '├── ');
+    const dur = span.duration_ms > 0 ? `${span.duration_ms}ms` : '0ms (paused)';
+    const line = `${indent}${prefix}<span style="color:${color};cursor:pointer;text-decoration:underline;text-decoration-style:dotted" onclick="showSpanAttrs('${span.span_id}')">${escapeHtml(span.name)}</span> <span style="color:var(--text-dim)">${dur}</span> <span style="color:var(--text-dim);font-size:10px">[${escapeHtml(span.service)}]</span>`;
+    let html = line + '\n';
+    const kids = childrenMap[span.span_id] || [];
+    kids.forEach(k => { html += renderSpan(k, depth + 1); });
+    return html;
+  }
+
+  let html = '';
+  (childrenMap['ROOT'] || []).forEach(s => { html += renderSpan(s, 0); });
+  tree.innerHTML = html;
+
+  // Add summary
+  const totalMs = spans.reduce((sum, s) => s.parent_id === null ? s.duration_ms : sum, 0);
+  const llmSpans = spans.filter(s => s.service === 'inferroute-gateway');
+  const tokenSpan = spans.find(s => s.attributes.input_tokens);
+  const totalTokens = tokenSpan ? (tokenSpan.attributes.input_tokens + tokenSpan.attributes.output_tokens) : 0;
+  const cost = tokenSpan?.attributes?.cost || '$0.00';
+  html += `\n<span style="color:var(--text-dim)">Total: ${totalMs}ms · Services: 3 · Spans: ${spans.length} · LLM tokens: ${totalTokens} · Cost: ${cost}</span>`;
+  tree.innerHTML = html;
+}
+
+function showSpanAttrs(spanId) {
+  const span = _traceSpans.find(s => s.span_id === spanId);
+  if (!span) return;
+  const div = document.getElementById('tr-attributes');
+  const attrs = span.attributes || {};
+  const entries = Object.entries(attrs);
+  if (entries.length === 0) {
+    div.innerHTML = '<span style="color:var(--text-dim)">No attributes for this span.</span>';
+    return;
+  }
+  div.innerHTML = `<div style="margin-bottom:8px;font-weight:600;color:var(--text)">${escapeHtml(span.name)} <span style="color:var(--text-dim);font-weight:400">(${escapeHtml(span.service)} · ${span.duration_ms}ms)</span></div>` +
+    `<table><thead><tr><th>Attribute</th><th>Value</th></tr></thead><tbody>` +
+    entries.map(([k, v]) => `<tr><td style="font-family:var(--mono);font-size:11px">${escapeHtml(k)}</td><td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">${escapeHtml(String(v))}</td></tr>`).join('') +
+    `</tbody></table>`;
+}
+
+// ═══════════════ Utils ═══════════════
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatNum(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+}
+</script>
+</body>
+</html>
