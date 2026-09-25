@@ -17,6 +17,7 @@ from app.observability.metrics import (
 from app.observability.tracing import TracingContext
 from app.core.database import db
 from app.core.config import settings
+from app.routing.cost import compute_call_cost
 
 logger = logging.getLogger("inferroute")
 router = APIRouter()
@@ -92,17 +93,17 @@ async def _enforce_quota(request: Request, tenant_id: str, tokens: int):
 async def _log_usage(tenant_id: str, provider: str, model: str,
                      input_tokens: int, output_tokens: int,
                      cache_hit: bool = False, routing_decision: str = "",
-                     trace_id: str = ""):
+                     trace_id: str = "", cost_usd: float = 0.0):
     """Log token usage to Postgres for billing/analytics."""
     try:
         pool = await db.get_pool()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO usage_log
-                (tenant_id, provider, model, input_tokens, output_tokens, total_tokens, cache_hit, routing_decision, trace_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
+                (tenant_id, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, cache_hit, routing_decision, trace_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
                 tenant_id, provider, model, input_tokens, output_tokens,
-                input_tokens + output_tokens, cache_hit, routing_decision, trace_id,
+                input_tokens + output_tokens, cost_usd, cache_hit, routing_decision, trace_id,
             )
     except Exception as e:
         logger.debug("Usage log failed (non-fatal): %s", e)
@@ -290,11 +291,30 @@ async def chat_completions(request: Request):
         # Enforce quota + log usage
         total_tokens = response.usage.input_tokens + response.usage.output_tokens
         await _enforce_quota(request, tenant_id, total_tokens)
+
+        # Compute cost (cache hits cost $0 — the original call already paid)
+        cost_usd = 0.0
+        if source == "miss":
+            registry = getattr(request.app.state, "registry", None)
+            if registry is not None:
+                provider_health = next(
+                    (p for p in registry.get_all() if p.provider_id == response.provider),
+                    None,
+                )
+                if provider_health is not None:
+                    cost_usd = compute_call_cost(
+                        provider_health.cost_per_1k_input,
+                        provider_health.cost_per_1k_output,
+                        response.usage.input_tokens,
+                        response.usage.output_tokens,
+                    )
+
         await _log_usage(
             tenant_id, response.provider, response.model,
             response.usage.input_tokens, response.usage.output_tokens,
             cache_hit=(source != "miss"), routing_decision=f"cache:{source}",
             trace_id=getattr(request.state, "trace_id", ""),
+            cost_usd=cost_usd,
         )
 
         # Record A/B outcome
@@ -339,6 +359,7 @@ async def chat_completions(request: Request):
             response_obj["x_rag"] = rag_metadata
         # Add routing metadata for observability
         if isinstance(response_obj, dict):
+            response_obj["cost_usd"] = cost_usd
             response_obj["x_routing"] = {
                 "provider": response.provider,
                 "model": response.model,
@@ -387,11 +408,29 @@ async def chat_completions(request: Request):
     # Enforce quota + log usage
     total_tokens = response.usage.input_tokens + response.usage.output_tokens
     await _enforce_quota(request, tenant_id, total_tokens)
+
+    # Compute cost
+    cost_usd = 0.0
+    registry = getattr(request.app.state, "registry", None)
+    if registry is not None:
+        provider_health = next(
+            (p for p in registry.get_all() if p.provider_id == response.provider),
+            None,
+        )
+        if provider_health is not None:
+            cost_usd = compute_call_cost(
+                provider_health.cost_per_1k_input,
+                provider_health.cost_per_1k_output,
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+            )
+
     await _log_usage(
         tenant_id, response.provider, response.model,
         response.usage.input_tokens, response.usage.output_tokens,
         cache_hit=False, routing_decision="direct",
         trace_id=getattr(request.state, "trace_id", ""),
+        cost_usd=cost_usd,
     )
 
     response_obj = OpenAIChatCompletionResponse(
@@ -416,6 +455,7 @@ async def chat_completions(request: Request):
         response_obj["x_rag"] = rag_metadata
     # Add routing metadata for observability
     if isinstance(response_obj, dict):
+        response_obj["cost_usd"] = cost_usd
         response_obj["x_routing"] = {
             "provider": response.provider,
             "model": response.model,
