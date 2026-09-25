@@ -23,8 +23,18 @@ class ProviderHealth:
     weight: float = 1.0
     last_check_time: float = field(default_factory=time.time)
     last_latency_ms: float = 0.0
-    cost_per_1k_tokens: float = 0.0
+    cost_per_1k_input: float = 0.0
+    cost_per_1k_output: float = 0.0
     tier: str = "standard"  # "cheap", "standard", "premium"
+
+    @property
+    def cost_per_1k_tokens(self) -> float:
+        """Average cost per 1K tokens (for backward compat with routing strategies).
+
+        Uses the average of input and output rates since routing doesn't know
+        the token split at selection time.
+        """
+        return (self.cost_per_1k_input + self.cost_per_1k_output) / 2
 
 
 class LoadBalancingStrategy(Protocol):

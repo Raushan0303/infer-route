@@ -85,7 +85,8 @@ async def lifespan(app: FastAPI):
             ),
             base_url="https://api.openai.com/v1",
             weight=1.0,
-            cost_per_1k_tokens=0.150,
+            cost_per_1k_input=0.150,
+            cost_per_1k_output=0.600,
             tier="premium",
         )
 
@@ -106,7 +107,8 @@ async def lifespan(app: FastAPI):
             ),
             base_url=settings.groq_base_url,
             weight=1.0,
-            cost_per_1k_tokens=0.059,
+            cost_per_1k_input=0.059,
+            cost_per_1k_output=0.079,
             tier="cheap",
         )
 
@@ -119,7 +121,8 @@ async def lifespan(app: FastAPI):
             ),
             base_url="https://api.anthropic.com/v1",
             weight=1.0,
-            cost_per_1k_tokens=0.800,
+            cost_per_1k_input=3.000,
+            cost_per_1k_output=15.000,
             tier="premium",
         )
 
@@ -138,7 +141,8 @@ async def lifespan(app: FastAPI):
         ),
         base_url=settings.vllm_base_url,
         weight=1.0,
-        cost_per_1k_tokens=0.0,
+        cost_per_1k_input=0.0,
+        cost_per_1k_output=0.0,
         tier="cheap",
     )
 
