@@ -4,7 +4,7 @@ Unlike static strategies (round_robin, cost_aware, etc.), the DynamicRouter
 combines ALL signals into a single score:
   - Latency (EWMA, lower is better)
   - In-flight count (lower is better)
-  - Cost per 1K tokens (lower is better)
+  - Cost per 1M tokens (lower is better)
   - Circuit breaker state (must be healthy)
   - Weight (developer preference)
 
@@ -57,12 +57,12 @@ class DynamicRouter:
         load_score = max(0.0, 1.0 - (provider.in_flight / 50.0))
 
         # Cost score: cheaper = higher score
-        # Normalize: $0 → 1.0, $0.05/1K → 0.0
-        cost = provider.cost_per_1k_tokens or 0
+        # Normalize: $0 → 1.0, $50 per 1M tokens → 0.0
+        cost = provider.cost_per_1m_tokens or 0
         if config.cost_ceiling:
             cost_score = max(0.0, 1.0 - (cost / config.cost_ceiling))
         else:
-            cost_score = max(0.0, 1.0 - (cost / 0.05))
+            cost_score = max(0.0, 1.0 - (cost / 50.0))
 
         # Weight score: developer preference
         weight_score = min(1.0, target.weight / 5.0) if target.weight > 0 else 0.0

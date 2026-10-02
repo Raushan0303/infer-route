@@ -25,7 +25,8 @@ class RoutingService:
     def register_circuit_breaker(self, provider_id: str, breaker: CircuitBreaker):
         self._circuit_breakers[provider_id] = breaker
 
-    async def route(self, request: InferRouteRequest, extra_headers: dict = None) -> InferRouteResponse:
+    async def route(self, request: InferRouteRequest, extra_headers: dict = None,
+                    preferred_provider: str = None) -> InferRouteResponse:
         # Extract tenant_id and config_id from headers
         tenant_id = (extra_headers or {}).get("x-tenant-id", "default")
         config_id = (extra_headers or {}).get("x-config-id")
@@ -46,7 +47,11 @@ class RoutingService:
         if not healthy:
             raise RuntimeError("No healthy providers available")
 
-        selected = await self._registry.select(request=request)
+        # A/B experiments pin the request to the variant's provider when it
+        # is healthy; otherwise the strategy decides. Failover still applies.
+        selected = next((p for p in healthy if p.provider_id == preferred_provider), None)
+        if selected is None:
+            selected = await self._registry.select(request=request)
         if selected is None:
             selected = healthy[0]
 

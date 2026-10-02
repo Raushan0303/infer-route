@@ -27,34 +27,34 @@ class ProviderRegistry:
         adapter: object,
         base_url: str,
         weight: float = 1.0,
-        cost_per_1k_input: float = 0.0,
-        cost_per_1k_output: float = 0.0,
-        cost_per_1k_tokens: float = None,
+        cost_per_1m_input: float = 0.0,
+        cost_per_1m_output: float = 0.0,
+        cost_per_1m_tokens: float = None,
         tier: str = "standard",
     ):
         """Register a provider.
 
         Cost pricing is split into input and output rates (most providers
-        charge different rates). For backward compat, cost_per_1k_tokens
+        charge different rates). For backward compat, cost_per_1m_tokens
         can still be passed as a single float — it sets both input and
         output to the same value.
         """
-        if cost_per_1k_tokens is not None:
-            cost_per_1k_input = cost_per_1k_tokens
-            cost_per_1k_output = cost_per_1k_tokens
+        if cost_per_1m_tokens is not None:
+            cost_per_1m_input = cost_per_1m_tokens
+            cost_per_1m_output = cost_per_1m_tokens
 
         self._providers[provider_id] = ProviderHealth(
             provider_id=provider_id,
             adapter=adapter,
             base_url=base_url,
             weight=weight,
-            cost_per_1k_input=cost_per_1k_input,
-            cost_per_1k_output=cost_per_1k_output,
+            cost_per_1m_input=cost_per_1m_input,
+            cost_per_1m_output=cost_per_1m_output,
             tier=tier,
         )
         logger.info(
-            "Registered provider: %s (weight=%.2f, tier=%s, cost=$%.4f/1k in, $%.4f/1k out)",
-            provider_id, weight, tier, cost_per_1k_input, cost_per_1k_output,
+            "Registered provider: %s (weight=%.2f, tier=%s, cost=$%.4f/1M in, $%.4f/1M out)",
+            provider_id, weight, tier, cost_per_1m_input, cost_per_1m_output,
         )
 
     def get_healthy(self) -> list[ProviderHealth]:
