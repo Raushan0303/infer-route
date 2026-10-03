@@ -82,7 +82,7 @@ async def test_pipeline_coalesces_concurrent_identical_requests():
 
     call_count = 0
 
-    async def route_fn(req):
+    async def route_fn(req, **kwargs):
         nonlocal call_count
         call_count += 1
         await asyncio.sleep(0.1)
@@ -131,7 +131,7 @@ async def test_pipeline_tenant_isolation():
 
     route_count = 0
 
-    async def route_fn(req):
+    async def route_fn(req, **kwargs):
         nonlocal route_count
         route_count += 1
         return make_response(f"answer_{route_count}")

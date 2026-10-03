@@ -54,7 +54,7 @@ async def test_semantic_cache_hit_above_threshold():
     }
 
     mock_redis.smembers.return_value = {"entry1"}
-    mock_redis.get.return_value = json.dumps(entry)
+    mock_redis.mget.return_value = [json.dumps(entry)]
 
     cache = SemanticCache(mock_redis, mock_embedding)
     req = InferRouteRequest(
@@ -89,7 +89,7 @@ async def test_semantic_cache_miss_below_threshold():
     }
 
     mock_redis.smembers.return_value = {"entry1"}
-    mock_redis.get.return_value = json.dumps(entry)
+    mock_redis.mget.return_value = [json.dumps(entry)]
 
     cache = SemanticCache(mock_redis, mock_embedding)
     req = InferRouteRequest(

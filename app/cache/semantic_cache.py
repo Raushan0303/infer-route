@@ -12,12 +12,12 @@ logger = logging.getLogger("inferroute")
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
+    # math.sumprod runs the dot product in C (Python 3.12+)
+    norm_a = math.sqrt(math.sumprod(a, a))
+    norm_b = math.sqrt(math.sumprod(b, b))
     if norm_a == 0 or norm_b == 0:
         return 0.0
-    return dot / (norm_a * norm_b)
+    return math.sumprod(a, b) / (norm_a * norm_b)
 
 
 def xfetch_expired(created_at: float, ttl: int) -> bool:
@@ -56,30 +56,46 @@ class SemanticCache:
 
             namespace = request.namespace
             index_key = self._index_key(tenant_id, namespace)
-            entry_ids = await self._redis.smembers(index_key)
+            entry_ids = list(await self._redis.smembers(index_key))
             if not entry_ids:
+                return None
+
+            # One round trip for all entries (was one GET per entry).
+            raws = await self._redis.mget(
+                [self._entry_key(tenant_id, eid, namespace) for eid in entry_ids]
+            )
+            stale = [eid for eid, raw in zip(entry_ids, raws) if raw is None]
+            if stale:
+                await self._redis.srem(index_key, *stale)
+
+            query_norm = math.sqrt(math.sumprod(query_embedding, query_embedding))
+            if query_norm == 0:
                 return None
 
             best_similarity = 0.0
             best_response = None
-
-            for entry_id in entry_ids:
-                entry_key = self._entry_key(tenant_id, entry_id, namespace)
-                raw = await self._redis.get(entry_key)
+            best_id = None
+            for entry_id, raw in zip(entry_ids, raws):
                 if raw is None:
-                    await self._redis.srem(index_key, entry_id)
                     continue
-
                 entry = json.loads(raw)
-                if xfetch_expired(entry["created_at"], self._ttl):
-                    await self._redis.delete(entry_key)
-                    await self._redis.srem(index_key, entry_id)
+                emb = entry["embedding"]
+                norm = entry.get("norm") or math.sqrt(math.sumprod(emb, emb))
+                if norm == 0:
                     continue
-
-                sim = cosine_similarity(query_embedding, entry["embedding"])
+                sim = math.sumprod(query_embedding, emb) / (query_norm * norm)
                 if sim > best_similarity:
-                    best_similarity = sim
-                    best_response = entry
+                    best_similarity, best_response, best_id = sim, entry, entry_id
+
+            # XFetch early expiry is decided once, for the entry we would
+            # serve — not rolled for every scanned entry (that randomly
+            # evicted entries on every lookup). An early-expired match is a
+            # miss for THIS caller, who refreshes it upstream.
+            if (best_response is not None and best_similarity >= self._threshold
+                    and xfetch_expired(best_response["created_at"], self._ttl)):
+                await self._redis.delete(self._entry_key(tenant_id, best_id, namespace))
+                await self._redis.srem(index_key, best_id)
+                return None
 
             if best_response is not None and best_similarity >= self._threshold:
                 logger.debug(
@@ -104,6 +120,7 @@ class SemanticCache:
 
             entry = {
                 "embedding": embedding,
+                "norm": math.sqrt(math.sumprod(embedding, embedding)),
                 "response": response.model_dump(),
                 "created_at": time.time(),
                 "prompt": prompt_text,

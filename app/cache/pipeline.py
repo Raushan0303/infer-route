@@ -31,6 +31,8 @@ class CachePipeline:
         tenant_id: str,
         request: InferRouteRequest,
         transform: callable = None,
+        extra_headers: dict = None,
+        preferred_provider: str = None,
     ) -> tuple[InferRouteResponse, str]:
         # 1. Try exact-match cache
         cached = await self._exact.get(tenant_id, request)
@@ -47,7 +49,9 @@ class CachePipeline:
             return cached, "semantic"
 
         # 3. Coalesce + call upstream
-        coalesce_key = f"{tenant_id}:{request_hash(request)}"
+        # Requests pinned to different providers (A/B variants) must not share
+        # one upstream call.
+        coalesce_key = f"{tenant_id}:{preferred_provider or ''}:{request_hash(request)}"
 
         in_flight_before = self._coalescer.in_flight_count
 
@@ -58,7 +62,9 @@ class CachePipeline:
             route_request = request
             if transform is not None:
                 route_request = await transform(request)
-            response = await self._routing.route(route_request)
+            response = await self._routing.route(
+                route_request, extra_headers=extra_headers, preferred_provider=preferred_provider,
+            )
             # Write to both caches on success (keyed by original request)
             await self._exact.set(tenant_id, request, response)
             await self._semantic.set(tenant_id, request, response)
