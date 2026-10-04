@@ -85,9 +85,11 @@ async def lifespan(app: FastAPI):
             ),
             base_url="https://api.openai.com/v1",
             weight=1.0,
-            cost_per_1k_input=0.150,
-            cost_per_1k_output=0.600,
-            tier="premium",
+            # gpt-4o-mini list price per 1M tokens. It is the CHEAPEST hosted
+            # model registered here, so it is the "cheap" tier.
+            cost_per_1m_input=0.15,
+            cost_per_1m_output=0.60,
+            tier="cheap",
         )
 
     if settings.groq_api_key:
@@ -107,9 +109,11 @@ async def lifespan(app: FastAPI):
             ),
             base_url=settings.groq_base_url,
             weight=1.0,
-            cost_per_1k_input=0.059,
-            cost_per_1k_output=0.079,
-            tier="cheap",
+            # llama-3.3-70b-versatile on Groq: $0.59 in / $0.79 out per 1M.
+            # ~4x gpt-4o-mini on input, so it is NOT the cheap tier.
+            cost_per_1m_input=0.59,
+            cost_per_1m_output=0.79,
+            tier="standard",
         )
 
     if settings.anthropic_api_key:
@@ -121,8 +125,8 @@ async def lifespan(app: FastAPI):
             ),
             base_url="https://api.anthropic.com/v1",
             weight=1.0,
-            cost_per_1k_input=3.000,
-            cost_per_1k_output=15.000,
+            cost_per_1m_input=3.00,
+            cost_per_1m_output=15.00,
             tier="premium",
         )
 
@@ -141,8 +145,8 @@ async def lifespan(app: FastAPI):
         ),
         base_url=settings.vllm_base_url,
         weight=1.0,
-        cost_per_1k_input=0.0,
-        cost_per_1k_output=0.0,
+        cost_per_1m_input=0.0,
+        cost_per_1m_output=0.0,
         tier="cheap",
     )
 
@@ -312,9 +316,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.middleware("http")(auth_middleware)
-app.middleware("http")(rate_limit_middleware)
+# Starlette runs the LAST registered middleware FIRST (outermost). Register
+# innermost → outermost so a request flows metrics → auth → rate_limit →
+# tracing → route. auth must run before rate_limit and tracing because both
+# read request.state.tenant_id (tests/gateway/test_tenant_isolation.py).
 app.middleware("http")(tracing_middleware)
+app.middleware("http")(rate_limit_middleware)
+app.middleware("http")(auth_middleware)
 app.middleware("http")(metrics_middleware)
 app.include_router(gateway_router)
 

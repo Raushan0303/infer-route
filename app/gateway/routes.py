@@ -18,6 +18,7 @@ from app.observability.tracing import TracingContext
 from app.core.database import db
 from app.core.config import settings
 from app.routing.cost import compute_call_cost
+from app.routing.pricing import prices_for
 
 logger = logging.getLogger("inferroute")
 router = APIRouter()
@@ -178,6 +179,16 @@ def _build_rag_transform(rag_service, tenant_id: str, namespace: str, top_k: int
     return transform, rag_metadata
 
 
+def _call_cost(request: Request, response) -> float:
+    """USD cost of one billed upstream call, priced by the model that served it."""
+    registry = getattr(request.app.state, "registry", None)
+    provider = None
+    if registry is not None:
+        provider = next((p for p in registry.get_all() if p.provider_id == response.provider), None)
+    cost_in, cost_out = prices_for(response.model or "", provider)
+    return compute_call_cost(cost_in, cost_out, response.usage.input_tokens, response.usage.output_tokens)
+
+
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     body = await request.json()
@@ -244,8 +255,10 @@ async def chat_completions(request: Request):
     # A/B routing
     ab_router = getattr(request.app.state, "ab_router", None)
     variant = None
+    preferred_provider = None
     if ab_router is not None:
         variant = ab_router.assign_variant(tenant_id, body.get("user", ""))
+        preferred_provider = ab_router.get_provider_for_variant(variant)
 
     # Classify complexity for routing metadata
     complexity = "medium"
@@ -266,6 +279,7 @@ async def chat_completions(request: Request):
         try:
             response, source = await cache_pipeline.process(
                 tenant_id, internal_request, transform=rag_transform,
+                extra_headers=extra_headers, preferred_provider=preferred_provider,
             )
         except Exception as e:
             request_total.labels(
@@ -274,6 +288,10 @@ async def chat_completions(request: Request):
             raise HTTPException(status_code=502, detail=f"Provider error: {e}")
 
         duration = time.monotonic() - start
+        # Only "upstream" is a billed provider call. Cache hits ("exact",
+        # "semantic") and coalesced followers ("coalesced") reuse a response
+        # that was already paid for.
+        billed = source == "upstream"
         request_total.labels(
             provider=response.provider, status="success", tenant_id=tenant_id,
         ).inc()
@@ -283,7 +301,7 @@ async def chat_completions(request: Request):
         _record_llm_trace(
             request, response,
             provider=response.provider,
-            cache_hit=(source != "miss"),
+            cache_hit=not billed,
             routing_decision=f"cache:{source}",
             rag_metadata=rag_metadata if rag_metadata and rag_metadata["retrieved"] > 0 else None,
         )
@@ -292,37 +310,24 @@ async def chat_completions(request: Request):
         total_tokens = response.usage.input_tokens + response.usage.output_tokens
         await _enforce_quota(request, tenant_id, total_tokens)
 
-        # Compute cost (cache hits cost $0 — the original call already paid)
-        cost_usd = 0.0
-        if source == "miss":
-            registry = getattr(request.app.state, "registry", None)
-            if registry is not None:
-                provider_health = next(
-                    (p for p in registry.get_all() if p.provider_id == response.provider),
-                    None,
-                )
-                if provider_health is not None:
-                    cost_usd = compute_call_cost(
-                        provider_health.cost_per_1k_input,
-                        provider_health.cost_per_1k_output,
-                        response.usage.input_tokens,
-                        response.usage.output_tokens,
-                    )
+        cost_usd = _call_cost(request, response) if billed else 0.0
 
         await _log_usage(
             tenant_id, response.provider, response.model,
             response.usage.input_tokens, response.usage.output_tokens,
-            cache_hit=(source != "miss"), routing_decision=f"cache:{source}",
+            cache_hit=not billed, routing_decision=f"cache:{source}",
             trace_id=getattr(request.state, "trace_id", ""),
             cost_usd=cost_usd,
         )
 
-        # Record A/B outcome
-        if ab_router is not None and variant:
+        # Record A/B outcome — only for billed calls actually served by the
+        # variant's provider (cache hits would skew latency and cost).
+        if ab_router is not None and variant and billed:
             ab_router.record_outcome(
                 variant,
-                cost=response.usage.input_tokens + response.usage.output_tokens,
+                cost=cost_usd,
                 latency_ms=duration * 1000,
+                provider=response.provider,
             )
 
         # Shadow traffic (fire-and-forget, non-blocking)
@@ -353,22 +358,22 @@ async def chat_completions(request: Request):
                 "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
             },
         )
+        response_obj = response_obj.model_dump()
         if rag_metadata and rag_metadata["retrieved"] > 0:
-            rag_metadata["cache_hit"] = source != "miss" and source != "upstream"
-            response_obj = response_obj.model_dump()
+            rag_metadata["cache_hit"] = not billed
             response_obj["x_rag"] = rag_metadata
-        # Add routing metadata for observability
-        if isinstance(response_obj, dict):
-            response_obj["cost_usd"] = cost_usd
-            response_obj["x_routing"] = {
-                "provider": response.provider,
-                "model": response.model,
-                "complexity": complexity,
-                "tier": tier,
-                "cache_status": source if source != "miss" else "miss",
-                "strategy": getattr(request.app.state, "strategy_name", "intelligence_aware"),
-                "latency_ms": round(duration * 1000, 1),
-            }
+        # cost_usd + routing metadata on every response (not only RAG ones)
+        response_obj["cost_usd"] = cost_usd
+        response_obj["x_routing"] = {
+            "provider": response.provider,
+            "model": response.model,
+            "complexity": complexity,
+            "tier": tier,
+            "cache_status": source,
+            "strategy": getattr(request.app.state, "strategy_name", "intelligence_aware"),
+            "latency_ms": round(duration * 1000, 1),
+            "ab_variant": variant,
+        }
         return response_obj
 
     # Fallback: no cache pipeline, route directly
@@ -383,7 +388,9 @@ async def chat_completions(request: Request):
 
     start = time.monotonic()
     try:
-        response = await routing_service.route(route_request, extra_headers=extra_headers)
+        response = await routing_service.route(
+            route_request, extra_headers=extra_headers, preferred_provider=preferred_provider,
+        )
     except Exception as e:
         request_total.labels(
             provider="unknown", status="error", tenant_id=tenant_id,
@@ -409,21 +416,7 @@ async def chat_completions(request: Request):
     total_tokens = response.usage.input_tokens + response.usage.output_tokens
     await _enforce_quota(request, tenant_id, total_tokens)
 
-    # Compute cost
-    cost_usd = 0.0
-    registry = getattr(request.app.state, "registry", None)
-    if registry is not None:
-        provider_health = next(
-            (p for p in registry.get_all() if p.provider_id == response.provider),
-            None,
-        )
-        if provider_health is not None:
-            cost_usd = compute_call_cost(
-                provider_health.cost_per_1k_input,
-                provider_health.cost_per_1k_output,
-                response.usage.input_tokens,
-                response.usage.output_tokens,
-            )
+    cost_usd = _call_cost(request, response)
 
     await _log_usage(
         tenant_id, response.provider, response.model,
@@ -432,6 +425,10 @@ async def chat_completions(request: Request):
         trace_id=getattr(request.state, "trace_id", ""),
         cost_usd=cost_usd,
     )
+
+    if ab_router is not None and variant:
+        ab_router.record_outcome(variant, cost=cost_usd, latency_ms=duration * 1000,
+                                 provider=response.provider)
 
     response_obj = OpenAIChatCompletionResponse(
         id=response.id or f"chatcmpl-{response.provider}",
@@ -449,22 +446,22 @@ async def chat_completions(request: Request):
             "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
         },
     )
+    response_obj = response_obj.model_dump()
     if rag_metadata and rag_metadata["retrieved"] > 0:
         rag_metadata["cache_hit"] = False
-        response_obj = response_obj.model_dump()
         response_obj["x_rag"] = rag_metadata
-    # Add routing metadata for observability
-    if isinstance(response_obj, dict):
-        response_obj["cost_usd"] = cost_usd
-        response_obj["x_routing"] = {
-            "provider": response.provider,
-            "model": response.model,
-            "complexity": complexity,
-            "tier": tier,
-            "cache_status": "miss",
-            "strategy": getattr(request.app.state, "strategy_name", "intelligence_aware"),
-            "latency_ms": round(duration * 1000, 1),
-        }
+    # cost_usd + routing metadata on every response (not only RAG ones)
+    response_obj["cost_usd"] = cost_usd
+    response_obj["x_routing"] = {
+        "provider": response.provider,
+        "model": response.model,
+        "complexity": complexity,
+        "tier": tier,
+        "cache_status": "miss",
+        "strategy": getattr(request.app.state, "strategy_name", "intelligence_aware"),
+        "latency_ms": round(duration * 1000, 1),
+        "ab_variant": variant,
+    }
     return response_obj
 
 
@@ -493,6 +490,37 @@ async def feedback_stats(request: Request):
     if feedback_store is None:
         return {"total": 0}
     return await feedback_store.get_stats()
+
+
+@router.post("/v1/experiments/promote")
+async def promote_challenger(request: Request):
+    """Swap providers: the challenger (variant B) becomes the control (A).
+
+    Every swap is appended to a durable log with the stats it was based on,
+    so "how many provider swaps, when, and on what evidence" is answerable.
+    """
+    ab_router = getattr(request.app.state, "ab_router", None)
+    if ab_router is None:
+        raise HTTPException(status_code=503, detail="Experiments disabled")
+    body = await request.json()
+    try:
+        swap = await ab_router.promote(
+            reason=body.get("reason", ""),
+            new_challenger=body.get("new_challenger"),
+            min_samples=int(body.get("min_samples", 0)),
+            redis=getattr(request.app.state, "redis", None),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return swap
+
+
+@router.get("/v1/experiments/swaps")
+async def experiment_swaps(request: Request):
+    ab_router = getattr(request.app.state, "ab_router", None)
+    if ab_router is None:
+        return {"swaps": []}
+    return {"swaps": await ab_router.list_swaps(redis=getattr(request.app.state, "redis", None))}
 
 
 @router.get("/v1/experiments/stats")
@@ -578,11 +606,32 @@ async def mcp_invoke(tool_name: str, request: Request):
     if mcp_gateway is None:
         raise HTTPException(status_code=503, detail="MCP gateway not available")
 
+    from app.mcp.gateway import MCPToolError
     try:
         result = await mcp_gateway.invoke(tool_name, payload)
         return {"status": "ok", "tool": tool_name, "result": result}
+    except MCPToolError as e:
+        raise HTTPException(status_code=422, detail=f"Tool error: {e}")
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.post("/v1/mcp/servers/register")
+async def mcp_register_server(request: Request):
+    """Register an MCP server: tools/list discovers its tools, and the server
+    becomes a replica of each one."""
+    body = await request.json()
+    replica_id, endpoint = body.get("replica_id"), body.get("endpoint")
+    if not replica_id or not endpoint:
+        raise HTTPException(status_code=400, detail="replica_id and endpoint required")
+    mcp_gateway = getattr(request.app.state, "mcp_gateway", None)
+    if mcp_gateway is None:
+        raise HTTPException(status_code=503, detail="MCP gateway not available")
+    try:
+        tools = await mcp_gateway.discover(endpoint, replica_id)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"tools/list failed on {endpoint}: {e}")
+    return {"status": "registered", "replica": replica_id, "tools": tools}
 
 
 @router.post("/v1/mcp/tools/{tool_name}/register")

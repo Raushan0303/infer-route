@@ -8,16 +8,23 @@ from app.observability.tracing import TracingContext
 logger = logging.getLogger("inferroute")
 
 
-async def auth_middleware(request: Request, call_next):
+def resolve_tenant(request: Request) -> str:
+    """Set request.state.api_key / tenant_id from the Authorization header (idempotent)."""
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if tenant_id is not None:
+        return tenant_id
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
-        api_key = auth[7:]
-        request.state.api_key = api_key
-        request.state.tenant_id = api_key
+        request.state.api_key = auth[7:]
+        request.state.tenant_id = auth[7:]
     else:
         request.state.api_key = None
         request.state.tenant_id = "anonymous"
+    return request.state.tenant_id
 
+
+async def auth_middleware(request: Request, call_next):
+    resolve_tenant(request)
     response = await call_next(request)
     return response
 
@@ -30,7 +37,8 @@ async def rate_limit_middleware(request: Request, call_next):
     if rate_limiter is None:
         return await call_next(request)
 
-    tenant_id = getattr(request.state, "tenant_id", "anonymous")
+    # Resolve here too, so the bucket key never depends on middleware order.
+    tenant_id = resolve_tenant(request)
     result = await rate_limiter.check(tenant_id)
 
     if not result.allowed:

@@ -129,7 +129,7 @@ async def test_pipeline_applies_transform_on_cache_miss():
     # Track what request gets routed
     routed_request = None
 
-    async def route_fn(req):
+    async def route_fn(req, **kwargs):
         nonlocal routed_request
         routed_request = req
         return upstream_response
