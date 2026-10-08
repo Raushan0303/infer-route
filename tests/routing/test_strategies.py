@@ -90,9 +90,9 @@ class TestCostAware:
     @pytest.mark.asyncio
     async def test_picks_cheapest(self):
         providers = [
-            ProviderHealth(provider_id="openai", adapter=None, base_url="", cost_per_1k_input=0.150, cost_per_1k_output=0.600),
-            ProviderHealth(provider_id="groq", adapter=None, base_url="", cost_per_1k_input=0.059, cost_per_1k_output=0.079),
-            ProviderHealth(provider_id="anthropic", adapter=None, base_url="", cost_per_1k_input=3.000, cost_per_1k_output=15.000),
+            ProviderHealth(provider_id="openai", adapter=None, base_url="", cost_per_1m_input=0.150, cost_per_1m_output=0.600),
+            ProviderHealth(provider_id="groq", adapter=None, base_url="", cost_per_1m_input=0.059, cost_per_1m_output=0.079),
+            ProviderHealth(provider_id="anthropic", adapter=None, base_url="", cost_per_1m_input=3.000, cost_per_1m_output=15.000),
         ]
         strategy = CostAware()
         selected = await strategy.select(providers)
@@ -101,7 +101,7 @@ class TestCostAware:
     @pytest.mark.asyncio
     async def test_returns_none_when_all_unhealthy(self):
         providers = [
-            ProviderHealth(provider_id="openai", adapter=None, base_url="", status="UNHEALTHY", cost_per_1k_input=0.150, cost_per_1k_output=0.600),
+            ProviderHealth(provider_id="openai", adapter=None, base_url="", status="UNHEALTHY", cost_per_1m_input=0.150, cost_per_1m_output=0.600),
         ]
         strategy = CostAware()
         assert await strategy.select(providers) is None
@@ -109,8 +109,8 @@ class TestCostAware:
     @pytest.mark.asyncio
     async def test_zero_cost_is_cheapest(self):
         providers = [
-            ProviderHealth(provider_id="groq", adapter=None, base_url="", cost_per_1k_input=0.059, cost_per_1k_output=0.079),
-            ProviderHealth(provider_id="vllm", adapter=None, base_url="", cost_per_1k_input=0.0, cost_per_1k_output=0.0),
+            ProviderHealth(provider_id="groq", adapter=None, base_url="", cost_per_1m_input=0.059, cost_per_1m_output=0.079),
+            ProviderHealth(provider_id="vllm", adapter=None, base_url="", cost_per_1m_input=0.0, cost_per_1m_output=0.0),
         ]
         strategy = CostAware()
         selected = await strategy.select(providers)
@@ -120,9 +120,9 @@ class TestCostAware:
 class TestIntelligenceAware:
     def _make_providers(self):
         return [
-            ProviderHealth(provider_id="openai", adapter=None, base_url="", tier="premium", cost_per_1k_input=0.150, cost_per_1k_output=0.600, weight=1.0),
-            ProviderHealth(provider_id="groq", adapter=None, base_url="", tier="cheap", cost_per_1k_input=0.059, cost_per_1k_output=0.079, weight=1.0),
-            ProviderHealth(provider_id="vllm", adapter=None, base_url="", tier="cheap", cost_per_1k_input=0.0, cost_per_1k_output=0.0, weight=1.0),
+            ProviderHealth(provider_id="openai", adapter=None, base_url="", tier="premium", cost_per_1m_input=0.150, cost_per_1m_output=0.600, weight=1.0),
+            ProviderHealth(provider_id="groq", adapter=None, base_url="", tier="cheap", cost_per_1m_input=0.059, cost_per_1m_output=0.079, weight=1.0),
+            ProviderHealth(provider_id="vllm", adapter=None, base_url="", tier="cheap", cost_per_1m_input=0.0, cost_per_1m_output=0.0, weight=1.0),
         ]
 
     @pytest.mark.asyncio
@@ -152,9 +152,9 @@ class TestIntelligenceAware:
     @pytest.mark.asyncio
     async def test_medium_task_routes_to_standard(self):
         providers = [
-            ProviderHealth(provider_id="openai", adapter=None, base_url="", tier="premium", cost_per_1k_input=0.150, cost_per_1k_output=0.600, weight=1.0),
-            ProviderHealth(provider_id="groq", adapter=None, base_url="", tier="standard", cost_per_1k_input=0.059, cost_per_1k_output=0.079, weight=1.0),
-            ProviderHealth(provider_id="vllm", adapter=None, base_url="", tier="cheap", cost_per_1k_input=0.0, cost_per_1k_output=0.0, weight=1.0),
+            ProviderHealth(provider_id="openai", adapter=None, base_url="", tier="premium", cost_per_1m_input=0.150, cost_per_1m_output=0.600, weight=1.0),
+            ProviderHealth(provider_id="groq", adapter=None, base_url="", tier="standard", cost_per_1m_input=0.059, cost_per_1m_output=0.079, weight=1.0),
+            ProviderHealth(provider_id="vllm", adapter=None, base_url="", tier="cheap", cost_per_1m_input=0.0, cost_per_1m_output=0.0, weight=1.0),
         ]
         request = InferRouteRequest(
             model="gpt-4o-mini",
