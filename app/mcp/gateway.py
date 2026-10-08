@@ -1,20 +1,46 @@
-import asyncio
+"""MCP gateway: load-balanced, circuit-broken tools/call to MCP server replicas.
+
+Speaks the real Model Context Protocol through the official SDK client
+(JSON-RPC over Streamable HTTP): replicas are MCP servers, discovery is
+`tools/list`, invocation is `tools/call`. Per-replica circuit breakers and
+failover are InferRoute's addition on top of the protocol.
+
+Error semantics:
+  * transport / server failure  → breaker records a failure, fail over
+  * tool error (is_error=True)  → MCPToolError to the caller, no failover
+    and no breaker penalty: the replica is healthy, the arguments were bad
+"""
 import logging
-import httpx
-from app.mcp.registry import MCPRegistry
-from app.resilience.circuit_breaker import CircuitBreaker
+from collections.abc import Callable
+
+from mcp import Client
+
 from app.core.config import settings
+from app.mcp.registry import MCPRegistry
 from app.observability.metrics import mcp_tool_invoke_total
+from app.resilience.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger("inferroute")
 
 
+class MCPToolError(Exception):
+    """The tool ran and reported an error (CallToolResult.is_error)."""
+
+
+def _payload(result) -> dict:
+    if result.structured_content is not None:
+        return result.structured_content
+    return {"content": [getattr(c, "text", None) for c in result.content]}
+
+
 class MCPGateway:
 
-    def __init__(self, registry: MCPRegistry):
+    def __init__(self, registry: MCPRegistry, client_factory: Callable[[str], Client] = Client):
         self._registry = registry
         self._breakers: dict[str, CircuitBreaker] = {}
-        self._clients: dict[str, httpx.AsyncClient] = {}
+        # endpoint → MCP client (a URL means Streamable HTTP). Injectable so
+        # tests can connect to in-process MCP servers.
+        self._client_factory = client_factory
 
     def _breaker_key(self, tool_name: str, replica_id: str) -> str:
         return f"{tool_name}:{replica_id}"
@@ -29,14 +55,17 @@ class MCPGateway:
             )
         return self._breakers[key]
 
-    def _get_client(self, endpoint: str) -> httpx.AsyncClient:
-        if endpoint not in self._clients:
-            self._clients[endpoint] = httpx.AsyncClient(
-                timeout=httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0),
-            )
-        return self._clients[endpoint]
+    async def discover(self, endpoint: str, replica_id: str) -> list[str]:
+        """tools/list on an MCP server; register it as a replica of each tool."""
+        async with self._client_factory(endpoint) as client:
+            result = await client.list_tools()
+        names = [t.name for t in result.tools]
+        for name in names:
+            self._registry.register(name, replica_id, endpoint)
+        logger.info("MCP discover endpoint=%s replica=%s tools=%s", endpoint, replica_id, names)
+        return names
 
-    async def invoke(self, tool_name: str, payload: dict) -> dict:
+    async def invoke(self, tool_name: str, arguments: dict) -> dict:
         tried = []
         last_error = None
 
@@ -53,35 +82,29 @@ class MCPGateway:
 
             tried.append(replica)
             self._registry.increment_in_flight(tool_name, replica.replica_id)
-
             try:
-                client = self._get_client(replica.endpoint)
-                resp = await client.post(
-                    f"{replica.endpoint}/invoke",
-                    json=payload,
-                )
-                resp.raise_for_status()
-                result = resp.json()
-
-                await breaker.record_success()
-                self._registry.decrement_in_flight(tool_name, replica.replica_id)
-                mcp_tool_invoke_total.labels(tool_name=tool_name, status="success").inc()
-                return result
-
+                async with self._client_factory(replica.endpoint) as client:
+                    result = await client.call_tool(tool_name, arguments)
             except Exception as e:
                 last_error = e
                 await breaker.record_failure()
-                self._registry.decrement_in_flight(tool_name, replica.replica_id)
                 self._registry.mark_unhealthy(tool_name, replica.replica_id)
                 mcp_tool_invoke_total.labels(tool_name=tool_name, status="error").inc()
                 logger.warning("MCP replica %s failed: %s. Trying next.", replica.replica_id, e)
                 continue
+            finally:
+                self._registry.decrement_in_flight(tool_name, replica.replica_id)
+
+            await breaker.record_success()
+            if result.is_error:
+                mcp_tool_invoke_total.labels(tool_name=tool_name, status="tool_error").inc()
+                raise MCPToolError(" ".join(getattr(c, "text", "") for c in result.content))
+            mcp_tool_invoke_total.labels(tool_name=tool_name, status="success").inc()
+            return _payload(result)
 
         raise RuntimeError(
             f"All replicas for tool '{tool_name}' failed. Tried: {[r.replica_id for r in tried]}. Last error: {last_error}"
         )
 
     async def close(self):
-        for client in self._clients.values():
-            await client.aclose()
-        self._clients.clear()
+        pass
