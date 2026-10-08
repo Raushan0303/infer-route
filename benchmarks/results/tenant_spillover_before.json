@@ -1,0 +1,19 @@
+{
+  "label": "before",
+  "config": {
+    "capacity": 20,
+    "refill_per_s": 10.0,
+    "duration_s": 10.0,
+    "noisy_target_rps": 50.0,
+    "quiet_rps": 5.0
+  },
+  "noisy": {
+    "sent": 500,
+    "rejected_429": 384
+  },
+  "quiet": {
+    "sent": 50,
+    "rejected_429": 48
+  },
+  "quiet_spillover_pct": 96.0
+}

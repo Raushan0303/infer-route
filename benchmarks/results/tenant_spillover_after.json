@@ -1,0 +1,19 @@
+{
+  "label": "after",
+  "config": {
+    "capacity": 20,
+    "refill_per_s": 10.0,
+    "duration_s": 10.0,
+    "noisy_target_rps": 50.0,
+    "quiet_rps": 5.0
+  },
+  "noisy": {
+    "sent": 500,
+    "rejected_429": 382
+  },
+  "quiet": {
+    "sent": 50,
+    "rejected_429": 0
+  },
+  "quiet_spillover_pct": 0.0
+}

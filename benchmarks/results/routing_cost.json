@@ -1,0 +1,396 @@
+{
+  "prompts": 60,
+  "assumptions": {
+    "input_tokens": "chars/4",
+    "output_tokens_by_label": {
+      "simple": 60,
+      "medium": 350,
+      "complex": 900
+    },
+    "classifier": "heuristic only (no LLM tier)",
+    "quality": "not measured"
+  },
+  "classifier_accuracy_vs_labels": 0.783,
+  "confusion_true_to_predicted": {
+    "complex->complex": 8,
+    "complex->medium": 12,
+    "medium->medium": 19,
+    "medium->simple": 1,
+    "simple->simple": 20
+  },
+  "routed_to": {
+    "gpt-4o-mini": 21,
+    "llama-3.3-70b-versatile": 31,
+    "gpt-4o": 8
+  },
+  "total_cost_usd": {
+    "routed": 0.087705,
+    "all_gpt_4o": 0.26446,
+    "all_gpt_4o_mini": 0.015868,
+    "all_llama_70b": 0.021279
+  },
+  "routed_vs_all_gpt_4o_saving_pct": 66.8,
+  "routed_vs_all_gpt_4o_mini_saving_pct": -452.7,
+  "rows": [
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.72e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.705e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.735e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.72e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.72e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.75e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.69e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.75e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.78e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.72e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.765e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.75e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.735e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.78e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.72e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.81e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.675e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.825e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.69e-05
+    },
+    {
+      "label": "simple",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 3.705e-05
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.0002824
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028594
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028181
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028476
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028358
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028417
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028358
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028358
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028417
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028181
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028417
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028417
+    },
+    {
+      "label": "medium",
+      "predicted": "simple",
+      "model": "gpt-4o-mini",
+      "cost_usd": 0.00021105
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028535
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028476
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.0002824
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028122
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028299
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028299
+    },
+    {
+      "label": "medium",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00028358
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.009105
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072811
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.0090825
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.0007287
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072811
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.00908
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072398
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.0090775
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.009065
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072634
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072575
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.009085
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.0090825
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072221
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072811
+    },
+    {
+      "label": "complex",
+      "predicted": "complex",
+      "model": "gpt-4o",
+      "cost_usd": 0.0090675
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072516
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072575
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072693
+    },
+    {
+      "label": "complex",
+      "predicted": "medium",
+      "model": "llama-3.3-70b-versatile",
+      "cost_usd": 0.00072516
+    }
+  ]
+}

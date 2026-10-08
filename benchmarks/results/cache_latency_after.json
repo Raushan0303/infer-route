@@ -1,0 +1,34 @@
+{
+  "label": "after",
+  "embedding": "local stub \u2014 excludes the embedding API round trip",
+  "exact": {
+    "n": 500,
+    "hit_rate": 1.0,
+    "p50_ms": 0.304,
+    "p99_ms": 1.551
+  },
+  "semantic@10": {
+    "n": 100,
+    "hit_rate": 1.0,
+    "p50_ms": 3.871,
+    "p99_ms": 7.707,
+    "entries_before": 10,
+    "entries_after": 10
+  },
+  "semantic@100": {
+    "n": 100,
+    "hit_rate": 1.0,
+    "p50_ms": 33.479,
+    "p99_ms": 52.714,
+    "entries_before": 100,
+    "entries_after": 100
+  },
+  "semantic@1000": {
+    "n": 30,
+    "hit_rate": 1.0,
+    "p50_ms": 327.37,
+    "p99_ms": 391.578,
+    "entries_before": 1000,
+    "entries_after": 1000
+  }
+}

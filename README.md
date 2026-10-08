@@ -10,7 +10,7 @@
 
 [Live Architecture Walkthrough →](https://uiagent-sigma.vercel.app/architecture) · [AgentMesh (sister project)](https://github.com/Raushan0303/agent-mesh)
 
-> Status: Weeks 1-13 complete. A 3-tier hybrid classifier (heuristic → Redis-cached LLM classification) routes prompts to the cheapest capable provider, cutting inference cost ~60% on simple/medium queries. A two-tier cache (exact-match + semantic cosine similarity with XFetch probabilistic TTL) plus request coalescing serves repeated queries in <5ms vs. ~800ms upstream. Per-provider circuit breakers, Redis-backed token-bucket rate limiting, and per-tenant quotas cut cross-tenant incident spillover by 94%. Per-call cost computation with split input/output token pricing returns `cost_usd` on every response.
+> Status: Weeks 1-13 complete. A 3-tier hybrid classifier (heuristic → Redis-cached LLM classification) routes prompts by complexity (simple → gpt-4o-mini, medium → Llama-3.3-70B, complex → GPT-4o); on a 60-prompt labeled mix that is an estimated 66.8% cheaper than sending everything to GPT-4o at list prices (`benchmarks/routing_cost.py`). A two-tier cache (exact-match + semantic cosine similarity with XFetch probabilistic TTL) plus request coalescing: exact hits measured at 0.3 ms p50 against Redis; semantic hits are an O(n) scan (≈4 ms at 10 entries, 33 ms at 100) plus the embedding call (`benchmarks/cache_latency.py`). Per-tenant Redis token buckets: in a noisy-neighbor benchmark, a quiet tenant's 429 rate went from 96% to 0% after fixing the middleware order (`benchmarks/tenant_spillover.py`). Per-call cost computation with split input/output token pricing returns `cost_usd` on every response.
 
 ### Three design decisions worth knowing before reading the code
 
@@ -113,7 +113,7 @@ FastAPI Gateway ─────────────────── app/ga
     ▼
 Cache Pipeline ──────────────────── app/cache/pipeline.py
     ├── Exact-match cache (Redis string)     → <1ms for identical queries
-    ├── Semantic cache (Redis + embeddings)  → <5ms for similar queries
+    ├── Semantic cache (Redis + embeddings)  → O(n) scan + embedding call
     └── Request coalescer                    → dedup concurrent identical calls
     │
     │ [cache miss → continue]
@@ -170,7 +170,7 @@ graph TB
 
     subgraph Cache["Cache Pipeline"]
         Exact["Exact Cache<br/>Redis string<br/>&lt;1ms"]
-        Semantic["Semantic Cache<br/>Redis + embeddings<br/>&lt;5ms"]
+        Semantic["Semantic Cache<br/>Redis + embeddings<br/>O(n) scan"]
         Coalesce["Request Coalescer<br/>dedup concurrent"]
     end
 
@@ -382,14 +382,14 @@ The complexity classifier has two tiers:
 
 **Why not just use the LLM classifier for everything?** Because it costs money and adds latency. 70% of prompts are classifiable by heuristic. The LLM classifier only fires for the 30% the heuristic can't handle. And those LLM classifications are cached — the same prompt never gets classified twice.
 
-**Result:** ~60% cost reduction on simple/medium queries, because they get routed to cheap providers (GPT-4o-mini, Haiku) instead of premium models (GPT-4o, Claude 3.5 Sonnet).
+**Measured (estimate, not billed spend):** `python -m benchmarks.routing_cost` runs 60 labeled prompts through the real classifier and strategy and prices them at list prices: routed = 66.8% cheaper than all-GPT-4o, but 5.5× the cost of all-gpt-4o-mini. Input tokens ≈ chars/4, output length assumed per class, answer quality not measured; the heuristic classifier sent 12 of 20 complex prompts to the medium tier. Prices are per 1M tokens, priced by the model that served the call (`app/routing/pricing.py`).
 
 ### 2. Why two cache tiers (exact + semantic)?
 
 | Cache | What it catches | Latency | Hit rate |
 |---|---|---|---|
 | **Exact-match** | Identical query strings | <1ms | ~15% |
-| **Semantic** | Similar queries (cosine similarity > 0.92) | <5ms | ~25% additional |
+| **Semantic** | Similar queries (cosine similarity ≥ 0.95) | O(n) scan: 4 / 33 / 327 ms p50 at 10 / 100 / 1000 entries, + embedding call | not measured |
 
 The exact cache is a simple Redis string lookup — O(1), sub-millisecond. It catches the case where two users ask the exact same question.
 
@@ -446,6 +446,18 @@ This `cost_usd` is returned in every response and persisted to the `usage_log` t
 
 ---
 
+## Measured results
+
+Every number below has a script; results are saved under `benchmarks/results/`.
+
+| What | Result | Reproduce |
+|---|---|---|
+| Noisy-neighbor rate limiting | quiet tenant 429s: 96% → 0% after the middleware-order fix | `python -m benchmarks.tenant_spillover --label after` (Redis on :6390) |
+| Exact cache hit | 0.30 ms p50, 1.1 ms p99 (local Redis) | `python -m benchmarks.cache_latency` |
+| Semantic cache hit (excl. embedding call) | 3.9 / 33 / 327 ms p50 at 10 / 100 / 1000 entries | `python -m benchmarks.cache_latency` |
+| Complexity routing cost (estimate) | 66.8% cheaper than all-GPT-4o; 5.5× all-gpt-4o-mini | `python -m benchmarks.routing_cost` |
+| A/B provider swaps | logged per swap with the stats behind it | `GET /v1/experiments/swaps` |
+
 ## API Reference
 
 Base URL: `http://localhost:8070`
@@ -471,8 +483,9 @@ Base URL: `http://localhost:8070`
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/v1/mcp/tools` | List registered MCP tools |
-| `POST` | `/v1/mcp/tools/{name}/register` | Register an MCP tool |
-| `POST` | `/v1/mcp/tools/{name}/invoke` | Invoke an MCP tool |
+| `POST` | `/v1/mcp/servers/register` | Register an MCP server: `tools/list` discovers its tools |
+| `POST` | `/v1/mcp/tools/{name}/register` | Register a replica for one tool |
+| `POST` | `/v1/mcp/tools/{name}/invoke` | `tools/call` on a healthy replica (per-replica breakers, failover) |
 
 ### Routing config endpoints
 
@@ -594,7 +607,7 @@ $ make test
 
 **XFetch** — A probabilistic cache freshness algorithm. Instead of a hard TTL, each cache hit has a small probability of revalidating with the upstream. Prevents thundering herd on mass expiration while keeping entries fresh.
 
-**MCP (Model Context Protocol)** — A protocol for connecting AI models to external tools. InferRoute's MCP gateway allows agents to invoke registered tools through InferRoute, with circuit breakers per tool replica.
+**MCP (Model Context Protocol)** — A protocol for connecting AI models to external tools. InferRoute's MCP gateway is an MCP client (official `mcp` SDK, Streamable HTTP): it discovers tools with `tools/list` and invokes them with `tools/call`, adding per-replica circuit breakers and failover.
 
 ---
 
